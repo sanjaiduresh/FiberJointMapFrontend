@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Segment, CreateSegmentPayload } from '../types';
+import { API_BASE } from '../config';
 
-const API_URL = '/api/segments';
+const API_URL = `${API_BASE}/api/segments`;
 
 interface RawSegment {
   _id: string;

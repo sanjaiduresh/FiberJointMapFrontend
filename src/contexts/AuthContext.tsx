@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { AuthUser } from '../types';
+import { API_BASE } from '../config';
 
 const TOKEN_KEY = 'fiber_token';
-const API_URL = '/api/auth';
+const API_URL = `${API_BASE}/api/auth`;
 
 interface AuthContextValue {
   user: AuthUser | null;

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Cut, CreateCutPayload } from '../types';
+import { API_BASE } from '../config';
 
-const API_URL = '/api/cuts';
+const API_URL = `${API_BASE}/api/cuts`;
 
 interface RawCut {
   _id: string;
