@@ -10,6 +10,8 @@ interface AddJointModalProps {
 
 export default function AddJointModal({ lat, lng, onSubmit, onClose }: AddJointModalProps) {
   const [label, setLabel] = useState('');
+  const [cableType, setCableType] = useState<'Single Mode' | 'Multi Mode'>('Single Mode');
+  const [fiberCount, setFiberCount] = useState(12);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -23,7 +25,7 @@ export default function AddJointModal({ lat, lng, onSubmit, onClose }: AddJointM
     setSubmitting(true);
     setError('');
     try {
-      await onSubmit({ label: label.trim(), notes: notes.trim(), lat, lng });
+      await onSubmit({ label: label.trim(), notes: notes.trim(), cableType, fiberCount, lat, lng });
       onClose();
     } catch {
       setError('Failed to save joint');
@@ -86,6 +88,31 @@ export default function AddJointModal({ lat, lng, onSubmit, onClose }: AddJointM
               className="w-full px-3 py-2.5 bg-slate-900/50 border border-slate-600/50 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all"
               autoFocus
             />
+          </div>
+
+          {/* Cable Type + Fiber Count */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">Cable Type</label>
+              <select
+                value={cableType}
+                onChange={(e) => setCableType(e.target.value as typeof cableType)}
+                className="w-full px-3 py-2.5 bg-slate-900/50 border border-slate-600/50 rounded-xl text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all"
+              >
+                <option value="Single Mode">Single Mode</option>
+                <option value="Multi Mode">Multi Mode</option>
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">Fiber Count</label>
+              <input
+                type="number"
+                min={1}
+                value={fiberCount}
+                onChange={(e) => setFiberCount(parseInt(e.target.value) || 1)}
+                className="w-full px-3 py-2.5 bg-slate-900/50 border border-slate-600/50 rounded-xl text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all"
+              />
+            </div>
           </div>
 
           {/* Notes */}

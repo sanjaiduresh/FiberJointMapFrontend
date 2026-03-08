@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://fiber-joint-map-backend.vercel.app/',
+        target: 'https://fiber-joint-map-backend.vercel.app',
         changeOrigin: true,
       },
     },

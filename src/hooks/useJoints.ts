@@ -7,8 +7,11 @@ interface RawJoint {
   _id: string;
   label: string;
   notes: string;
+  cableType: 'Single Mode' | 'Multi Mode';
+  fiberCount: number;
   lat: number;
   lng: number;
+  createdBy: { userId: string; userName: string };
   createdAt: string;
 }
 
@@ -17,20 +20,23 @@ function mapJoint(raw: RawJoint): FiberJoint {
     id: raw._id,
     label: raw.label,
     notes: raw.notes,
+    cableType: raw.cableType || 'Single Mode',
+    fiberCount: raw.fiberCount ?? 12,
     lat: raw.lat,
     lng: raw.lng,
+    createdBy: raw.createdBy || { userId: '', userName: 'Unknown' },
     createdAt: raw.createdAt,
   };
 }
 
-export function useJoints() {
+export function useJoints(token: string | null) {
   const [joints, setJoints] = useState<FiberJoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchJoints = useCallback(async () => {
+  const fetchJoints = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await fetch(API_URL);
       if (!res.ok) throw new Error('Failed to fetch joints');
       const data: RawJoint[] = await res.json();
@@ -39,14 +45,17 @@ export function useJoints() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   const createJoint = useCallback(async (payload: CreateJointPayload) => {
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to create joint');
@@ -54,16 +63,26 @@ export function useJoints() {
     const newJoint = mapJoint(raw);
     setJoints((prev) => [newJoint, ...prev]);
     return newJoint;
-  }, []);
+  }, [token]);
 
   const deleteJoint = useCallback(async (id: string) => {
-    const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+    const res = await fetch(`${API_URL}/${id}`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to delete joint');
     setJoints((prev) => prev.filter((j) => j.id !== id));
-  }, []);
+  }, [token]);
 
+  // Initial fetch
   useEffect(() => {
     fetchJoints();
+  }, [fetchJoints]);
+
+  // 10-second polling
+  useEffect(() => {
+    const interval = setInterval(() => fetchJoints(true), 10000);
+    return () => clearInterval(interval);
   }, [fetchJoints]);
 
   return { joints, loading, error, createJoint, deleteJoint, refetch: fetchJoints };
