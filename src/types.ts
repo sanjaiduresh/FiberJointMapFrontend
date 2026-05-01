@@ -1,8 +1,11 @@
 // === Joint Types ===
+export type JointType = 'Base' | 'Main' | 'Sub' | 'Splice';
+
 export interface FiberJoint {
   id: string;
   label: string;
   notes: string;
+  jointType: JointType;
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
   lat: number;
@@ -14,33 +17,11 @@ export interface FiberJoint {
 export interface CreateJointPayload {
   label: string;
   notes: string;
+  jointType: JointType;
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
   lat: number;
   lng: number;
-}
-
-// === Cut Types ===
-export interface Cut {
-  id: string;
-  lat: number;
-  lng: number;
-  severity: 'Low' | 'Medium' | 'High' | 'Critical';
-  description: string;
-  status: 'Cut' | 'Fixed';
-  segmentId: string;
-  markedBy: { userId: string; userName: string };
-  fixedBy?: { userId: string; userName: string };
-  fixedAt?: string;
-  createdAt: string;
-}
-
-export interface CreateCutPayload {
-  lat: number;
-  lng: number;
-  severity: 'Low' | 'Medium' | 'High' | 'Critical';
-  description: string;
-  segmentId: string;
 }
 
 // === Segment Types ===
@@ -48,6 +29,7 @@ export interface Segment {
   id: string;
   fromJointId: string;
   toJointId: string;
+  waypoints: Array<{ lat: number; lng: number }>;
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
   lengthMeters: number;
@@ -58,8 +40,21 @@ export interface Segment {
 export interface CreateSegmentPayload {
   fromJointId: string;
   toJointId: string;
+  waypoints: Array<{ lat: number; lng: number }>;
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
+  lengthMeters?: number;
+}
+
+export interface SpliceJointPayload {
+  segmentId: string;
+  label: string;
+  notes: string;
+  jointType: JointType;
+  cableType: 'Single Mode' | 'Multi Mode';
+  fiberCount: number;
+  lat: number;
+  lng: number;
 }
 
 // === Auth Types ===

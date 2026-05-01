@@ -4,10 +4,11 @@ import { API_BASE } from '../config';
 
 const API_URL = `${API_BASE}/api/segments`;
 
-interface RawSegment {
+export interface RawSegment {
   _id: string;
   fromJointId: string;
   toJointId: string;
+  waypoints: Array<{ lat: number; lng: number }>;
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
   lengthMeters: number;
@@ -20,6 +21,7 @@ function mapSegment(raw: RawSegment): Segment {
     id: raw._id,
     fromJointId: raw.fromJointId,
     toJointId: raw.toJointId,
+    waypoints: raw.waypoints || [],
     cableType: raw.cableType,
     fiberCount: raw.fiberCount,
     lengthMeters: raw.lengthMeters,
@@ -34,9 +36,12 @@ export function useSegments(token: string | null) {
   const [error, setError] = useState<string | null>(null);
 
   const fetchSegments = useCallback(async (silent = false) => {
+    if (!token) return;
     try {
       if (!silent) setLoading(true);
-      const res = await fetch(API_URL);
+      const res = await fetch(API_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error('Failed to fetch segments');
       const data: RawSegment[] = await res.json();
       setSegments(data.map(mapSegment));
@@ -46,7 +51,7 @@ export function useSegments(token: string | null) {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   const createSegment = useCallback(async (payload: CreateSegmentPayload) => {
     const res = await fetch(API_URL, {
@@ -73,6 +78,19 @@ export function useSegments(token: string | null) {
     setSegments((prev) => prev.filter((s) => s.id !== id));
   }, [token]);
 
+  // Called after a splice — removes the old segment, adds the two new ones
+  const applySplice = useCallback((
+    deletedSegmentId: string,
+    rawSegA: RawSegment,
+    rawSegB: RawSegment,
+  ) => {
+    setSegments((prev) => [
+      ...prev.filter((s) => s.id !== deletedSegmentId),
+      mapSegment(rawSegA),
+      mapSegment(rawSegB),
+    ]);
+  }, []);
+
   // Initial fetch
   useEffect(() => {
     fetchSegments();
@@ -84,5 +102,10 @@ export function useSegments(token: string | null) {
     return () => clearInterval(interval);
   }, [fetchSegments]);
 
-  return { segments, loading, error, createSegment, deleteSegment, refetch: fetchSegments };
+
+  return {
+    segments, loading, error,
+    createSegment, deleteSegment, applySplice,
+    refetch: fetchSegments,
+  };
 }

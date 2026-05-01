@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { FiberJoint, CreateJointPayload } from '../types';
+import type { FiberJoint, CreateJointPayload, SpliceJointPayload } from '../types';
 import { API_BASE } from '../config';
+import type { RawSegment } from './useSegments';
 
 const API_URL = `${API_BASE}/api/joints`;
+const SEGMENTS_URL = `${API_BASE}/api/segments`;
 
 interface RawJoint {
   _id: string;
   label: string;
   notes: string;
+  jointType: 'Base' | 'Main' | 'Sub' | 'Splice';
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
   lat: number;
@@ -21,6 +24,7 @@ function mapJoint(raw: RawJoint): FiberJoint {
     id: raw._id,
     label: raw.label,
     notes: raw.notes,
+    jointType: raw.jointType || 'Main',
     cableType: raw.cableType || 'Single Mode',
     fiberCount: raw.fiberCount ?? 12,
     lat: raw.lat,
@@ -36,9 +40,12 @@ export function useJoints(token: string | null) {
   const [error, setError] = useState<string | null>(null);
 
   const fetchJoints = useCallback(async (silent = false) => {
+    if (!token) return;
     try {
       if (!silent) setLoading(true);
-      const res = await fetch(API_URL);
+      const res = await fetch(API_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error('Failed to fetch joints');
       const data: RawJoint[] = await res.json();
       setJoints(data.map(mapJoint));
@@ -48,7 +55,7 @@ export function useJoints(token: string | null) {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   const createJoint = useCallback(async (payload: CreateJointPayload) => {
     const res = await fetch(API_URL, {
@@ -75,6 +82,37 @@ export function useJoints(token: string | null) {
     setJoints((prev) => prev.filter((j) => j.id !== id));
   }, [token]);
 
+  // Splice a joint onto an existing segment — splits it into two
+  const spliceJoint = useCallback(async (payload: SpliceJointPayload): Promise<{
+    spliceJoint: FiberJoint;
+    segmentA: RawSegment;
+    segmentB: RawSegment;
+    deletedSegmentId: string;
+  }> => {
+    const { segmentId, ...rest } = payload;
+    const res = await fetch(`${SEGMENTS_URL}/${segmentId}/splice`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(rest),
+    });
+    if (!res.ok) throw new Error('Failed to splice joint');
+    const data = await res.json();
+
+    // Add the new splice joint to state immediately
+    const newJoint = mapJoint(data.spliceJoint);
+    setJoints((prev) => [newJoint, ...prev]);
+
+    return {
+      spliceJoint: newJoint,
+      segmentA: data.segmentA,
+      segmentB: data.segmentB,
+      deletedSegmentId: data.deletedSegmentId,
+    };
+  }, [token]);
+
   // Initial fetch
   useEffect(() => {
     fetchJoints();
@@ -86,5 +124,5 @@ export function useJoints(token: string | null) {
     return () => clearInterval(interval);
   }, [fetchJoints]);
 
-  return { joints, loading, error, createJoint, deleteJoint, refetch: fetchJoints };
+  return { joints, loading, error, createJoint, deleteJoint, spliceJoint, refetch: fetchJoints };
 }

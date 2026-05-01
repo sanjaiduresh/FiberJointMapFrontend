@@ -1,34 +1,75 @@
 import { useState } from 'react';
 import type { CreateSegmentPayload, FiberJoint } from '../types';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Link, Loader2, AlertCircle, MapIcon } from 'lucide-react';
 
 interface AddConnectionModalProps {
   joints: FiberJoint[];
   onSubmit: (payload: CreateSegmentPayload) => Promise<void>;
   onClose: () => void;
+  onPickWaypoints: (fromJointId: string, toJointId: string) => void;
+  pendingWaypoints: Array<{ lat: number; lng: number }>;
+  waypointsDone: boolean;
+  onResetWaypointsDone: () => void;
 }
 
-export default function AddConnectionModal({ joints, onSubmit, onClose }: AddConnectionModalProps) {
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calcRouteDistance(
+  fromJoint: FiberJoint | undefined,
+  toJoint: FiberJoint | undefined,
+  waypoints: Array<{ lat: number; lng: number }>,
+): number {
+  if (!fromJoint || !toJoint) return 0;
+  const points = [{ lat: fromJoint.lat, lng: fromJoint.lng }, ...waypoints, { lat: toJoint.lat, lng: toJoint.lng }];
+  let total = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    total += haversineMeters(points[i].lat, points[i].lng, points[i + 1].lat, points[i + 1].lng);
+  }
+  return Math.round(total * 100) / 100;
+}
+
+export default function AddConnectionModal({
+  joints, onSubmit, onClose,
+  onPickWaypoints, pendingWaypoints, waypointsDone: _waypointsDone, onResetWaypointsDone,
+}: AddConnectionModalProps) {
   const [fromJointId, setFromJointId] = useState(joints.length > 0 ? joints[0].id : '');
   const [toJointId, setToJointId] = useState(joints.length > 1 ? joints[1].id : '');
   const [cableType, setCableType] = useState<'Single Mode' | 'Multi Mode'>('Single Mode');
   const [fiberCount, setFiberCount] = useState(12);
+  const [lengthMeters, setLengthMeters] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const fromJoint = joints.find((j) => j.id === fromJointId);
+  const toJoint = joints.find((j) => j.id === toJointId);
+  const suggestedDistance = calcRouteDistance(fromJoint, toJoint, pendingWaypoints);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fromJointId || !toJointId) {
-      setError('Please select both joints');
-      return;
-    }
-    if (fromJointId === toJointId) {
-      setError('Cannot connect a joint to itself');
-      return;
-    }
+    if (!fromJointId || !toJointId) { setError('Please select both joints'); return; }
+    if (fromJointId === toJointId) { setError('Cannot connect a joint to itself'); return; }
     setSubmitting(true);
     setError('');
     try {
-      await onSubmit({ fromJointId, toJointId, cableType, fiberCount });
+      const meters = parseFloat(lengthMeters);
+      await onSubmit({
+        fromJointId, toJointId, waypoints: pendingWaypoints, cableType, fiberCount,
+        lengthMeters: meters > 0 ? meters : undefined,
+      });
       onClose();
     } catch {
       setError('Failed to create connection');
@@ -37,41 +78,43 @@ export default function AddConnectionModal({ joints, onSubmit, onClose }: AddCon
     }
   };
 
+  const handlePickRoute = () => {
+    if (!fromJointId || !toJointId) { setError('Please select both joints first'); return; }
+    if (fromJointId === toJointId) { setError('Cannot connect a joint to itself'); return; }
+    onResetWaypointsDone();
+    onPickWaypoints(fromJointId, toJointId);
+  };
+
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-slate-800 border border-slate-600/50 rounded-2xl shadow-2xl shadow-purple-500/10 w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="px-6 pt-6 pb-4">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-md max-h-[85dvh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
+              <Link className="size-5 text-purple-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">Add Connection</h2>
-              <p className="text-xs text-slate-400">Connect two fiber joints</p>
+              <DialogTitle>Add Connection</DialogTitle>
+              <DialogDescription>Connect two fiber joints with route</DialogDescription>
             </div>
           </div>
-        </div>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
+        <form onSubmit={handleSubmit} className="grid gap-4">
           {joints.length < 2 ? (
-            <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-3">
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-3">
               ⚠️ You need at least 2 joints to create a connection. Add joints to the map first.
             </div>
           ) : (
             <>
               {/* From Joint */}
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">
-                  From Joint <span className="text-red-400">*</span>
-                </label>
+              <div className="grid gap-1.5">
+                <Label htmlFor="conn-from">From Joint <span className="text-destructive">*</span></Label>
                 <select
+                  id="conn-from"
                   value={fromJointId}
                   onChange={(e) => setFromJointId(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-900/50 border border-slate-600/50 rounded-xl text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                   {joints.map((j) => (
                     <option key={j.id} value={j.id}>
@@ -82,14 +125,13 @@ export default function AddConnectionModal({ joints, onSubmit, onClose }: AddCon
               </div>
 
               {/* To Joint */}
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">
-                  To Joint <span className="text-red-400">*</span>
-                </label>
+              <div className="grid gap-1.5">
+                <Label htmlFor="conn-to">To Joint <span className="text-destructive">*</span></Label>
                 <select
+                  id="conn-to"
                   value={toJointId}
                   onChange={(e) => setToJointId(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-900/50 border border-slate-600/50 rounded-xl text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                   {joints.map((j) => (
                     <option key={j.id} value={j.id}>
@@ -100,71 +142,101 @@ export default function AddConnectionModal({ joints, onSubmit, onClose }: AddCon
               </div>
 
               {/* Cable Type + Fiber Count */}
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Cable Type</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="conn-cable">Cable Type</Label>
                   <select
+                    id="conn-cable"
                     value={cableType}
                     onChange={(e) => setCableType(e.target.value as typeof cableType)}
-                    className="w-full px-3 py-2.5 bg-slate-900/50 border border-slate-600/50 rounded-xl text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
+                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   >
                     <option value="Single Mode">Single Mode</option>
                     <option value="Multi Mode">Multi Mode</option>
                   </select>
                 </div>
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Fiber Count</label>
-                  <input
+                <div className="grid gap-1.5">
+                  <Label htmlFor="conn-fibers">Fiber Count</Label>
+                  <Input
+                    id="conn-fibers"
                     type="number"
                     min={1}
                     value={fiberCount}
                     onChange={(e) => setFiberCount(parseInt(e.target.value) || 1)}
-                    className="w-full px-3 py-2.5 bg-slate-900/50 border border-slate-600/50 rounded-xl text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
                   />
                 </div>
+              </div>
+
+              {/* Pick Route on Map */}
+              <div className="grid gap-1.5">
+                <Label>Route (Turns/Waypoints)</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePickRoute}
+                  className="w-full justify-center gap-2 border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800"
+                >
+                  <MapIcon className="size-4" />
+                  {pendingWaypoints.length > 0
+                    ? `${pendingWaypoints.length} turn${pendingWaypoints.length > 1 ? 's' : ''} placed — Click to re-pick`
+                    : 'Pick Route on Map'}
+                </Button>
+
+                {pendingWaypoints.length > 0 && (
+                  <div className="mt-1 space-y-1 max-h-28 overflow-y-auto">
+                    {pendingWaypoints.map((wp, i) => (
+                      <div key={i} className="flex items-center gap-2 px-2 py-1 bg-muted rounded-lg">
+                        <Badge variant="secondary" className="size-5 justify-center text-[10px] p-0 shrink-0">
+                          {i + 1}
+                        </Badge>
+                        <span className="text-[11px] text-muted-foreground font-mono flex-1">
+                          {wp.lat.toFixed(6)}, {wp.lng.toFixed(6)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Length */}
+              <div className="grid gap-1.5">
+                <Label htmlFor="conn-length">Cable Length (meters)</Label>
+                <Input
+                  id="conn-length"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={lengthMeters}
+                  onChange={(e) => setLengthMeters(e.target.value)}
+                  placeholder={suggestedDistance > 0 ? `Auto: ~${suggestedDistance.toFixed(1)}m` : 'Enter cable length'}
+                />
+                {suggestedDistance > 0 && (
+                  <p className="text-[10px] text-muted-foreground">
+                    📐 Auto-calculated: ~{suggestedDistance.toFixed(1)}m
+                    {!lengthMeters && ' (will be used if left empty)'}
+                  </p>
+                )}
               </div>
             </>
           )}
 
-          {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+            <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-lg px-3 py-2">
+              <AlertCircle className="size-4 shrink-0" />
               {error}
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl transition-colors"
-            >
+          <div className="flex gap-3 pt-1">
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || joints.length < 2}
-              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white text-sm font-medium rounded-xl shadow-lg shadow-purple-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Connecting...
-                </span>
-              ) : (
-                'Create Connection'
-              )}
-            </button>
+            </Button>
+            <Button type="submit" disabled={submitting || joints.length < 2} className="flex-1">
+              {submitting ? <><Loader2 className="size-4 animate-spin" />Connecting...</> : 'Create Connection'}
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
