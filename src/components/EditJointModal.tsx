@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CreateJointPayload, JointType } from '../types';
+import type { CreateJointPayload, JointType, FiberJoint } from '../types';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -7,14 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertCircle, MapPin, Building2, CircleDot, Circle, Scissors } from 'lucide-react';
+import { AlertCircle, Loader2, Edit3, Building2, CircleDot, Circle, Scissors, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 
-interface AddJointModalProps {
-  onSubmit: (payload: Omit<CreateJointPayload, 'lat' | 'lng'>) => void;
+interface EditJointModalProps {
+  joint: FiberJoint;
+  onSubmit: (payload: Partial<CreateJointPayload>) => Promise<void>;
+  onMoveLocation: () => void;
   onClose: () => void;
-  defaultType?: JointType;
 }
 
 
@@ -26,28 +27,36 @@ const JOINT_TYPES: { value: JointType; label: string; desc: string; color: strin
 ];
 
 
-export default function AddJointModal({
-  onSubmit, onClose, defaultType = 'Main',
-}: AddJointModalProps) {
-  const [label, setLabel] = useState('');
-  const [notes, setNotes] = useState('');
-  const [jointType, setJointType] = useState<JointType>(defaultType);
-  const [cableType, setCableType] = useState<'Single Mode' | 'Multi Mode'>('Single Mode');
-  const [fiberCount, setFiberCount] = useState(12);
+export default function EditJointModal({
+  joint, onSubmit, onMoveLocation, onClose,
+}: EditJointModalProps) {
+  const [label, setLabel] = useState(joint.label);
+  const [notes, setNotes] = useState(joint.notes || '');
+  const [jointType, setJointType] = useState<JointType>(joint.jointType);
+  const [cableType, setCableType] = useState<'Single Mode' | 'Multi Mode'>(joint.cableType);
+  const [fiberCount, setFiberCount] = useState(joint.fiberCount);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!label.trim()) { setError('Label is required'); return; }
+    setSubmitting(true);
     setError('');
-    onSubmit({
-      label: label.trim(),
-      notes,
-      jointType,
-      cableType,
-      fiberCount,
-    });
-    onClose();
+    try {
+      await onSubmit({
+        label: label.trim(),
+        notes,
+        jointType,
+        cableType,
+        fiberCount,
+      });
+      onClose();
+    } catch {
+      setError('Failed to update joint');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -55,13 +64,13 @@ export default function AddJointModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-              <MapPin className="size-5 text-primary" />
+            <div className="size-10 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
+              <Edit3 className="size-5 text-blue-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <DialogTitle>Add Joint</DialogTitle>
+              <DialogTitle>Edit Joint</DialogTitle>
               <DialogDescription>
-                Provide details for the new joint.
+                Update details or move this joint.
               </DialogDescription>
             </div>
           </div>
@@ -146,8 +155,19 @@ export default function AddJointModal({
               />
             </div>
           </div>
-
-
+          
+          <div className="grid gap-1.5 pt-1">
+            <Label>Location</Label>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start text-muted-foreground hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50"
+              onClick={onMoveLocation}
+            >
+              <MapPin className="size-4 mr-2" />
+              Move Location on Map
+            </Button>
+          </div>
 
           {error && (
             <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-lg px-3 py-2">
@@ -156,12 +176,15 @@ export default function AddJointModal({
             </div>
           )}
 
-          <div className="flex gap-3 pt-1">
+          <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" className="flex-1">
-              Next: Place on Map <MapPin className="size-4 ml-1" />
+            <Button type="submit" disabled={submitting} className="flex-1 bg-blue-600 hover:bg-blue-700">
+              {submitting
+                ? <><Loader2 className="size-4 animate-spin mr-1" />Saving...</>
+                : 'Save Changes'
+              }
             </Button>
           </div>
 

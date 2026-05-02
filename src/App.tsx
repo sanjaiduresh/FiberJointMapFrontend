@@ -14,13 +14,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { Segment } from './types';
+import type { Segment, CreateJointPayload } from './types';
 import {
   PanelLeftClose, PanelLeftOpen, Building, Locate,
   MapPin, Plus, Link, X, Undo2, Check, Loader2, LogOut,
-  Map as MapIcon, Settings, Trash2,
+  Map as MapIcon, Settings, Trash2, Scissors,
 } from 'lucide-react';
 import SpliceJointModal from './components/SpliceJointModal';
+import EditJointModal from './components/EditJointModal';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ export default function App() {
   const { user, token, loading: authLoading, logout, isAuthenticated } = useAuth();
   const {
     joints, loading: jointsLoading, error: jointsError,
-    createJoint, deleteJoint, spliceJoint,
+    createJoint, deleteJoint, spliceJoint, updateJoint,
   } = useJoints(token);
   const {
     segments, loading: segmentsLoading, error: segmentsError,
@@ -94,13 +95,27 @@ export default function App() {
   }, []);
 
   // ── modal / ui state ──
-  const [modalCoords, setModalCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [addJointModalCoords, setAddJointModalCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const mapRef = useRef<MapLibreMap | null>(null);
+
+  // ── placement mode state ──
+  const [placementMode, setPlacementMode] = useState(false);
+  const [placementPos, setPlacementPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [placementData, setPlacementData] = useState<Omit<CreateJointPayload, 'lat' | 'lng'> | null>(null);
+  const [placementIsSaving, setPlacementIsSaving] = useState(false);
+
+  // ── edit & move mode state ──
+  const [editingJointId, setEditingJointId] = useState<string | null>(null);
+  const editingJoint = joints.find(j => j.id === editingJointId) || null;
+
+  const [moveModeJointId, setMoveModeJointId] = useState<string | null>(null);
+  const [movePos, setMovePos] = useState<{ lat: number; lng: number } | null>(null);
+  const [moveIsSaving, setMoveIsSaving] = useState(false);
 
   // ── splice state ──
   const [spliceMode, setSpliceMode] = useState(false);
@@ -115,7 +130,13 @@ export default function App() {
   // ── waypoint mode state ──
   const [waypointMode, setWaypointMode] = useState(false);
   const [pendingWaypoints, setPendingWaypoints] = useState<Array<{ lat: number; lng: number }>>([]);
-  const [pendingConnection, setPendingConnection] = useState<{ fromJointId: string; toJointId: string } | null>(null);
+  const [pendingConnection, setPendingConnection] = useState<{
+    fromJointId: string;
+    toJointId: string;
+    cableType: 'Single Mode' | 'Multi Mode';
+    fiberCount: number;
+    lengthMeters: string;
+  } | null>(null);
   const [waypointsDone, setWaypointsDone] = useState(false);
 
   // ── trace / highlight state ──
@@ -163,16 +184,16 @@ export default function App() {
       setPendingWaypoints((prev) => [...prev, { lat, lng }]);
       return;
     }
-    if (spliceMode) return;
-    setModalCoords({ lat, lng });
+    if (spliceMode || placementMode || moveModeJointId) return;
+    setAddJointModalCoords({ lat, lng });
   };
 
-  const handlePickWaypoints = (fromJointId: string, toJointId: string) => {
-    setPendingConnection({ fromJointId, toJointId });
+  const handlePickWaypoints = (state: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; lengthMeters: string }) => {
+    setPendingConnection(state);
     setPendingWaypoints([]);
     setWaypointMode(true);
     setShowConnectionModal(false);
-    showToast('Click on the map to place turns along the cable route 📍');
+    showToast('Click on the map to place turns along the cable route');
   };
 
   const handleWaypointsDone = () => {
@@ -248,7 +269,7 @@ export default function App() {
     setSpliceSegmentId(segmentId);
     setSpliceMarkerPos({ lat, lng });
     setSpliceMode(true);
-    showToast('Drag the ✂️ marker to the exact splice point, then confirm');
+    showToast('Drag the marker to the exact splice point, then confirm');
   };
 
   const handleSpliceMarkerMove = (lat: number, lng: number) => {
@@ -380,6 +401,7 @@ export default function App() {
         joints={filteredJoints}
         segments={segments}
         onFlyTo={handleFlyTo}
+        onEditJoint={setEditingJointId}
         onDeleteJoint={handleDeleteJoint}
         onTraceRoute={handleTraceRoute}
         traceMode={traceMode}
@@ -485,8 +507,8 @@ export default function App() {
         {/* ── Waypoint mode banner ── */}
         {waypointMode && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-            <Badge className="h-7 px-3 text-xs font-medium shadow-md bg-purple-500 text-white">
-              📍 Click map to place turns — {pendingWaypoints.length} placed
+            <Badge className="h-7 px-3 text-xs font-medium shadow-md bg-purple-500 text-white flex items-center gap-1.5">
+              <MapPin className="size-3" /> Click map to place turns — {pendingWaypoints.length} placed
             </Badge>
           </div>
         )}
@@ -494,8 +516,26 @@ export default function App() {
         {/* ── Splice mode banner ── */}
         {spliceMode && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-            <Badge className="h-7 px-3 text-xs font-medium shadow-md bg-violet-600 text-white">
-              ✂️ Drag the marker to the splice point
+            <Badge className="h-7 px-3 text-xs font-medium shadow-md bg-violet-600 text-white flex items-center gap-1.5">
+              <Scissors className="size-3" /> Drag the marker to the splice point
+            </Badge>
+          </div>
+        )}
+
+        {/* ── Placement mode banner ── */}
+        {placementMode && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+            <Badge className="h-7 px-3 text-xs font-medium shadow-md bg-blue-600 text-white flex items-center gap-1.5">
+              <MapPin className="size-3" /> Drag the marker to the desired location
+            </Badge>
+          </div>
+        )}
+
+        {/* ── Move mode banner ── */}
+        {moveModeJointId && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+            <Badge className="h-7 px-3 text-xs font-medium shadow-md bg-amber-500 text-white flex items-center gap-1.5">
+              <MapPin className="size-3" /> Drag to move the joint
             </Badge>
           </div>
         )}
@@ -554,15 +594,143 @@ export default function App() {
           </div>
         )}
 
+        {/* ── Placement positioning controls (bottom bar) ── */}
+        {placementMode && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2">
+              <div className="bg-card border border-blue-200 rounded-lg px-3 py-1.5 shadow-sm">
+                {placementPos ? (
+                  <p className="text-[11px] text-blue-700 font-mono tabular-nums">
+                    {placementPos.lat.toFixed(6)}, {placementPos.lng.toFixed(6)}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">Drag to position</p>
+                )}
+              </div>
+              {liveLocation && (
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => setPlacementPos({ lat: liveLocation.lat, lng: liveLocation.lng })}
+                  className="bg-card shadow-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                >
+                  <Locate className="size-3.5 mr-1" />
+                  Use Live
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline" size="sm"
+                onClick={() => {
+                  setPlacementMode(false);
+                  setPlacementData(null);
+                  setPlacementPos(null);
+                }}
+                disabled={placementIsSaving}
+                className="bg-card shadow-sm"
+              >
+                <X className="size-3.5 mr-1" />
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  if (!placementData || !placementPos) return;
+                  setPlacementIsSaving(true);
+                  try {
+                    await createJoint({ ...placementData, lat: placementPos.lat, lng: placementPos.lng });
+                    showToast('Joint added!');
+                    setPlacementMode(false);
+                    setPlacementData(null);
+                    setPlacementPos(null);
+                  } catch {
+                    showToast('Failed to add joint', 'error');
+                  } finally {
+                    setPlacementIsSaving(false);
+                  }
+                }}
+                disabled={!placementPos || placementIsSaving}
+                className="bg-blue-600 hover:bg-blue-700 text-white shadow-md"
+              >
+                {placementIsSaving ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <Check className="size-3.5 mr-1" />}
+                Confirm Placement
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Move positioning controls (bottom bar) ── */}
+        {moveModeJointId && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2">
+              <div className="bg-card border border-amber-200 rounded-lg px-3 py-1.5 shadow-sm">
+                {movePos ? (
+                  <p className="text-[11px] text-amber-700 font-mono tabular-nums">
+                    {movePos.lat.toFixed(6)}, {movePos.lng.toFixed(6)}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">Drag to position</p>
+                )}
+              </div>
+              {liveLocation && (
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => setMovePos({ lat: liveLocation.lat, lng: liveLocation.lng })}
+                  className="bg-card shadow-sm text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200"
+                >
+                  <Locate className="size-3.5 mr-1" />
+                  Use Live
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline" size="sm"
+                onClick={() => {
+                  setMoveModeJointId(null);
+                  setMovePos(null);
+                }}
+                disabled={moveIsSaving}
+                className="bg-card shadow-sm"
+              >
+                <X className="size-3.5 mr-1" />
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  if (!movePos || !moveModeJointId) return;
+                  setMoveIsSaving(true);
+                  try {
+                    await updateJoint(moveModeJointId, { lat: movePos.lat, lng: movePos.lng });
+                    showToast('Joint moved successfully!');
+                    setMoveModeJointId(null);
+                    setMovePos(null);
+                  } catch {
+                    showToast('Failed to move joint', 'error');
+                  } finally {
+                    setMoveIsSaving(false);
+                  }
+                }}
+                disabled={!movePos || moveIsSaving}
+                className="bg-amber-500 hover:bg-amber-600 text-white shadow-md"
+              >
+                {moveIsSaving ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <Check className="size-3.5 mr-1" />}
+                Confirm Move
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* ── FAB ── */}
-        {!waypointMode && !spliceMode && (
+        {!waypointMode && !spliceMode && !placementMode && !moveModeJointId && (
           <div className="absolute bottom-6 right-4 md:right-6 z-10">
             {showAddMenu && (
               <div className="absolute bottom-16 right-0 bg-card border border-border rounded-xl shadow-lg overflow-hidden mb-2 w-52 ring-1 ring-foreground/5">
                 <button
                   onClick={() => {
                     setShowAddMenu(false);
-                    showToast('Click on the map to place a joint 📍');
+                    showToast('Click on the map to place a joint');
                   }}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted transition-colors text-left border-b border-border"
                 >
@@ -614,6 +782,7 @@ export default function App() {
           joints={filteredJoints}
           segments={segments}
           onMapClick={handleMapClick}
+          onEditJoint={setEditingJointId}
           onDeleteJoint={handleDeleteJoint}
           onDeleteSegment={handleDeleteSegment}
           onSegmentClick={handleSegmentClick}
@@ -627,22 +796,46 @@ export default function App() {
           spliceMode={spliceMode}
           spliceMarkerPos={spliceMarkerPos}
           onSpliceMarkerMove={handleSpliceMarkerMove}
+          placementMode={placementMode}
+          placementPos={placementPos}
+          onPlacementMarkerMove={(lat, lng) => setPlacementPos({ lat, lng })}
+          moveMode={!!moveModeJointId}
+          movePos={movePos}
+          onMoveMarkerMove={(lat, lng) => setMovePos({ lat, lng })}
           liveLocation={liveLocation}
         />
       </div>
 
       {/* ── Modals ───────────────────────────────────────────────────────────── */}
 
-      {modalCoords && (
+      {addJointModalCoords && (
         <AddJointModal
-          lat={modalCoords.lat}
-          lng={modalCoords.lng}
-          liveLocation={liveLocation}
-          onSubmit={async (payload) => {
-            await createJoint(payload);
-            showToast('Joint added! 📍');
+          onSubmit={(payload) => {
+            setPlacementData(payload);
+            setPlacementPos(addJointModalCoords);
+            setPlacementMode(true);
+            setAddJointModalCoords(null);
+            showToast('Drag the marker to exactly where you want to place the joint.');
           }}
-          onClose={() => setModalCoords(null)}
+          onClose={() => setAddJointModalCoords(null)}
+        />
+      )}
+
+      {editingJoint && (
+        <EditJointModal
+          joint={editingJoint}
+          onSubmit={async (payload) => {
+            await updateJoint(editingJoint.id, payload);
+            showToast('Joint updated!');
+          }}
+          onMoveLocation={() => {
+            setMoveModeJointId(editingJoint.id);
+            setMovePos({ lat: editingJoint.lat, lng: editingJoint.lng });
+            setEditingJointId(null);
+            showToast('Drag the marker to the new location.');
+            handleFlyTo(editingJoint.lat, editingJoint.lng);
+          }}
+          onClose={() => setEditingJointId(null)}
         />
       )}
 
@@ -653,7 +846,7 @@ export default function App() {
             await createSegment(payload);
             const from = joints.find((j) => j.id === payload.fromJointId);
             const to = joints.find((j) => j.id === payload.toJointId);
-            showToast(`Connected ${from?.label} → ${to?.label} 🔗`);
+            showToast(`Connected ${from?.label} to ${to?.label}`);
             setPendingWaypoints([]);
             setPendingConnection(null);
             setWaypointsDone(false);
@@ -668,6 +861,7 @@ export default function App() {
           pendingWaypoints={pendingWaypoints}
           waypointsDone={waypointsDone}
           onResetWaypointsDone={() => setWaypointsDone(false)}
+          pendingConnection={pendingConnection}
         />
       )}
 
@@ -682,7 +876,7 @@ export default function App() {
           onSubmit={async (payload) => {
             const result = await spliceJoint(payload);
             applySplice(result.deletedSegmentId, result.segmentA, result.segmentB);
-            showToast(`Splice joint "${payload.label}" added ✂️`);
+            showToast(`Splice joint "${payload.label}" added`);
             resetSpliceState();
           }}
           onClose={resetSpliceState}
@@ -777,7 +971,7 @@ export default function App() {
                       onClick={() => { handleFlyTo(j.lat, j.lng); setSettingsOpen(false); }}
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">🏢</span>
+                        <Building className="size-5 shrink-0 text-orange-500" />
                         <div>
                           <p className="text-sm font-medium text-foreground">{j.label}</p>
                           <p className="text-[10px] text-muted-foreground">

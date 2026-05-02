@@ -98,10 +98,13 @@ function jointHTML(j: FiberJoint) {
       <span class="badge badge-blue">${j.fiberCount} fibers</span>
     </div>
     ${j.notes ? `<p class="popup-notes">${j.notes}</p>` : ''}
-    <p class="popup-coord">📍 ${j.lat.toFixed(6)}, ${j.lng.toFixed(6)}</p>
-    <p class="popup-meta">👤 ${j.createdBy?.userName || 'Unknown'}</p>
-    <p class="popup-meta">🕐 ${fmtDate(j.createdAt)}</p>
-    <button data-delete-joint="${j.id}" class="popup-btn popup-btn-red">Delete Joint</button>
+    <p class="popup-coord">Location: ${j.lat.toFixed(6)}, ${j.lng.toFixed(6)}</p>
+    <p class="popup-meta">User: ${j.createdBy?.userName || 'Unknown'}</p>
+    <p class="popup-meta">Added: ${fmtDate(j.createdAt)}</p>
+    <div style="display:flex;gap:4px;margin-top:4px;">
+      <button data-edit-joint="${j.id}" class="popup-btn popup-btn-blue" style="flex:1">Edit</button>
+      <button data-delete-joint="${j.id}" class="popup-btn popup-btn-red" style="flex:1">Delete</button>
+    </div>
   </div>`;
 }
 
@@ -115,11 +118,11 @@ function segmentPopupHTML(seg: Segment, fromLabel: string, toLabel: string) {
       <span class="badge badge-cyan">${seg.cableType}</span>
       <span class="badge badge-blue">${seg.fiberCount} fibers</span>
     </div>
-    <p class="popup-notes">📏 <strong>${dist}</strong></p>
+    <p class="popup-notes">Length: <strong>${dist}</strong></p>
     <p class="popup-coord">From: <strong>${fromLabel}</strong></p>
     <p class="popup-coord">To: <strong>${toLabel}</strong></p>
-    <p class="popup-meta">👤 ${seg.createdBy?.userName || 'Unknown'}</p>
-    <button data-splice-segment="${seg.id}" class="popup-btn popup-btn-purple">✂️ Add Splice Here</button>
+    <p class="popup-meta">User: ${seg.createdBy?.userName || 'Unknown'}</p>
+    <button data-splice-segment="${seg.id}" class="popup-btn popup-btn-purple">Add Splice Here</button>
     <button data-delete-segment="${seg.id}" class="popup-btn popup-btn-red" style="margin-top:4px">Delete Segment</button>
   </div>`;
 }
@@ -132,6 +135,7 @@ interface MapViewProps {
   joints: FiberJoint[];
   segments: Segment[];
   onMapClick: (lat: number, lng: number) => void;
+  onEditJoint?: (id: string) => void;
   onDeleteJoint: (id: string) => void;
   onDeleteSegment?: (id: string) => void;
   onSegmentClick?: (segmentId: string, lat: number, lng: number) => void;
@@ -146,6 +150,14 @@ interface MapViewProps {
   spliceMode?: boolean;
   spliceMarkerPos?: { lat: number; lng: number } | null;
   onSpliceMarkerMove?: (lat: number, lng: number) => void;
+  // ── placement marker ──
+  placementMode?: boolean;
+  placementPos?: { lat: number; lng: number } | null;
+  onPlacementMarkerMove?: (lat: number, lng: number) => void;
+  // ── move marker ──
+  moveMode?: boolean;
+  movePos?: { lat: number; lng: number } | null;
+  onMoveMarkerMove?: (lat: number, lng: number) => void;
   // ── live location (owned by App.tsx) ──
   liveLocation?: { lat: number; lng: number; accuracy?: number } | null;
 }
@@ -153,28 +165,35 @@ interface MapViewProps {
 // ---------- component ----------
 
 export default function MapView({
-  joints, segments, onMapClick, onDeleteJoint, onDeleteSegment, onSegmentClick,
+  joints, segments, onMapClick, onEditJoint, onDeleteJoint, onDeleteSegment, onSegmentClick,
   highlightedSegmentIds, mapRef, onMapReady,
   waypointMode, pendingWaypoints, pendingFromJoint, pendingToJoint,
   spliceMode, spliceMarkerPos, onSpliceMarkerMove,
+  placementMode, placementPos, onPlacementMarkerMove,
+  moveMode, movePos, onMoveMarkerMove,
   liveLocation,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapObjRef = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
 
   const jMarkers = useRef(new Map<string, maplibregl.Marker>());
   const wpMarkers = useRef<maplibregl.Marker[]>([]);
   const liveMarker = useRef<maplibregl.Marker | null>(null);
   const spliceMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const placementMarkerRef = useRef<maplibregl.Marker | null>(null);
   const segmentPopup = useRef<maplibregl.Popup | null>(null);
   const suppressClick = useRef(false);
 
+  const cbEdit = useRef(onEditJoint); cbEdit.current = onEditJoint;
   const cbDelete = useRef(onDeleteJoint); cbDelete.current = onDeleteJoint;
   const cbDeleteSeg = useRef(onDeleteSegment); cbDeleteSeg.current = onDeleteSegment;
   const cbSplice = useRef(onSegmentClick); cbSplice.current = onSegmentClick;
   const cbClick = useRef(onMapClick); cbClick.current = onMapClick;
   const cbSpliceMove = useRef(onSpliceMarkerMove); cbSpliceMove.current = onSpliceMarkerMove;
+  const cbPlacementMove = useRef(onPlacementMarkerMove); cbPlacementMove.current = onPlacementMarkerMove;
+  const cbMoveMove = useRef(onMoveMarkerMove); cbMoveMove.current = onMoveMarkerMove;
 
   const jointsById = useMemo(() => {
     const m = new Map<string, FiberJoint>();
@@ -302,6 +321,7 @@ export default function MapView({
         if (!seg) return;
 
         segmentPopup.current?.remove();
+        setSelectedSegmentId(segId);
 
         const fromLabel = e.features[0].properties?.fromLabel as string ?? 'Unknown';
         const toLabel = e.features[0].properties?.toLabel as string ?? 'Unknown';
@@ -314,6 +334,10 @@ export default function MapView({
           .setLngLat([clickLng, clickLat])
           .setHTML(segmentPopupHTML(seg, fromLabel, toLabel))
           .addTo(map);
+
+        popup.on('close', () => {
+          setSelectedSegmentId(null);
+        });
 
         segmentPopup.current = popup;
       });
@@ -352,6 +376,9 @@ export default function MapView({
     if (!el) return;
     const h = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
+
+      const ej = t.closest<HTMLElement>('[data-edit-joint]');
+      if (ej) { cbEdit.current?.(ej.dataset.editJoint!); return; }
 
       const dj = t.closest<HTMLElement>('[data-delete-joint]');
       if (dj) { cbDelete.current(dj.dataset.deleteJoint!); return; }
@@ -437,7 +464,7 @@ export default function MapView({
       const to = jointsById.get(seg.toJointId);
       if (!from || !to) continue;
 
-      const isHl = highlightedSegmentIds.includes(seg.id);
+      const isHl = highlightedSegmentIds.includes(seg.id) || selectedSegmentId === seg.id;
       let color = '#3b82f6';
       let weight = 3;
       if (isHl) { color = '#f59e0b'; weight = 5; }
@@ -475,7 +502,7 @@ export default function MapView({
 
     src.setData({ type: 'FeatureCollection', features });
     labelSrc?.setData({ type: 'FeatureCollection', features: labelFeatures });
-  }, [segments, jointsById, highlightedSegmentIds, mapLoaded]);
+  }, [segments, jointsById, highlightedSegmentIds, selectedSegmentId, mapLoaded]);
 
   // ── SYNC PREVIEW LINE ──
   useEffect(() => {
@@ -586,6 +613,107 @@ export default function MapView({
     }
   }, [spliceMode, spliceMarkerPos, mapLoaded]);
 
+  // ── SYNC PLACEMENT MARKER ──
+  useEffect(() => {
+    const map = mapObjRef.current;
+    if (!map || !mapLoaded) return;
+
+    if (!placementMode || !placementPos) {
+      placementMarkerRef.current?.remove();
+      placementMarkerRef.current = null;
+      return;
+    }
+
+    if (!placementMarkerRef.current) {
+      const el = document.createElement('div');
+      el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38">
+        <path d="M13 0C5.8 0 0 5.8 0 13c0 9.75 13 25 13 25s13-15.25 13-25C26 5.8 20.2 0 13 0z" fill="#3b82f6"/>
+        <circle cx="13" cy="13" r="5" fill="white"/>
+      </svg>`;
+      Object.assign(el.style, {
+        cursor: 'grab',
+        filter: 'drop-shadow(0 2px 6px rgba(59,130,246,0.6))',
+        userSelect: 'none',
+      });
+
+      el.addEventListener('mousedown', () => {
+        suppressClick.current = true;
+        setTimeout(() => { suppressClick.current = false; }, 300);
+      });
+
+      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', draggable: true })
+        .setLngLat([placementPos.lng, placementPos.lat])
+        .addTo(map);
+
+      marker.on('dragstart', () => { el.style.cursor = 'grabbing'; });
+      marker.on('drag', () => {
+        const pos = marker.getLngLat();
+        cbPlacementMove.current?.(pos.lat, pos.lng);
+      });
+      marker.on('dragend', () => {
+        el.style.cursor = 'grab';
+        const pos = marker.getLngLat();
+        cbPlacementMove.current?.(pos.lat, pos.lng);
+      });
+
+      placementMarkerRef.current = marker;
+    } else {
+      placementMarkerRef.current.setLngLat([placementPos.lng, placementPos.lat]);
+    }
+  }, [placementMode, placementPos, mapLoaded]);
+
+  // ── SYNC MOVE MARKER ──
+  useEffect(() => {
+    const map = mapObjRef.current;
+    if (!map || !mapLoaded) return;
+
+    // Use placementMarkerRef since we never have placementMode and moveMode active together
+    if (!moveMode || !movePos) {
+      if (!placementMode) { // don't remove if placement mode is using it
+        placementMarkerRef.current?.remove();
+        placementMarkerRef.current = null;
+      }
+      return;
+    }
+
+    if (!placementMarkerRef.current) {
+      const el = document.createElement('div');
+      el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38">
+        <path d="M13 0C5.8 0 0 5.8 0 13c0 9.75 13 25 13 25s13-15.25 13-25C26 5.8 20.2 0 13 0z" fill="#f59e0b"/>
+        <circle cx="13" cy="13" r="5" fill="white"/>
+      </svg>`;
+      Object.assign(el.style, {
+        cursor: 'grab',
+        filter: 'drop-shadow(0 2px 6px rgba(245,158,11,0.6))',
+        userSelect: 'none',
+      });
+
+      el.addEventListener('mousedown', () => {
+        suppressClick.current = true;
+        setTimeout(() => { suppressClick.current = false; }, 300);
+      });
+
+      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', draggable: true })
+        .setLngLat([movePos.lng, movePos.lat])
+        .addTo(map);
+
+      marker.on('dragstart', () => { el.style.cursor = 'grabbing'; });
+      marker.on('drag', () => {
+        const pos = marker.getLngLat();
+        cbMoveMove.current?.(pos.lat, pos.lng);
+      });
+      marker.on('dragend', () => {
+        el.style.cursor = 'grab';
+        const pos = marker.getLngLat();
+        cbMoveMove.current?.(pos.lat, pos.lng);
+      });
+
+      placementMarkerRef.current = marker;
+    } else {
+      placementMarkerRef.current.setLngLat([movePos.lng, movePos.lat]);
+    }
+  }, [moveMode, movePos, placementMode, mapLoaded]);
+
   // ── SYNC LIVE LOCATION (from prop — App.tsx owns the watchPosition) ──
   useEffect(() => {
     const map = mapObjRef.current;
@@ -641,10 +769,9 @@ export default function MapView({
     liveMarker.current.getPopup()?.setHTML(
       `<div class="map-popup">
         <div class="popup-row">
-          <span style="font-size:18px">📡</span>
           <h3 class="popup-title">Your Location</h3>
         </div>
-        <p class="popup-coord">📍 ${liveLocation.lat.toFixed(6)}, ${liveLocation.lng.toFixed(6)}</p>
+        <p class="popup-coord">Location: ${liveLocation.lat.toFixed(6)}, ${liveLocation.lng.toFixed(6)}</p>
         ${liveLocation.accuracy != null
         ? `<p class="popup-meta">Accuracy: ±${liveLocation.accuracy.toFixed(0)}m</p>`
         : ''}

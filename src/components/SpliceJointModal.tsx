@@ -6,7 +6,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Loader2, Scissors, Locate, MapPin } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertCircle, Loader2, Scissors, Locate, MapPin, CircleDot, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SpliceJointModalProps {
@@ -20,10 +21,10 @@ interface SpliceJointModalProps {
   liveLocation?: { lat: number; lng: number; accuracy?: number } | null;
 }
 
-const JOINT_TYPES: { value: JointType; label: string; desc: string; color: string }[] = [
-  { value: 'Main', label: '🔵 Main', desc: 'Primary distribution', color: 'border-blue-400 bg-blue-50 text-blue-700' },
-  { value: 'Sub', label: '🟡 Sub', desc: 'End distribution', color: 'border-yellow-400 bg-yellow-50 text-yellow-700' },
-  { value: 'Splice', label: '🟣 Splice', desc: 'Mid-cable splice', color: 'border-purple-400 bg-purple-50 text-purple-700' },
+const JOINT_TYPES: { value: JointType; label: string; desc: string; color: string; icon: React.ElementType }[] = [
+  { value: 'Main', label: 'Main', desc: 'Primary distribution', color: 'border-blue-400 bg-blue-50 text-blue-700', icon: CircleDot },
+  { value: 'Sub', label: 'Sub', desc: 'End distribution', color: 'border-yellow-400 bg-yellow-50 text-yellow-700', icon: Circle },
+  { value: 'Splice', label: 'Splice', desc: 'Mid-cable splice', color: 'border-purple-400 bg-purple-50 text-purple-700', icon: Scissors },
 ];
 
 export default function SpliceJointModal({
@@ -96,13 +97,13 @@ export default function SpliceJointModal({
         {targetSegment && fromJoint && toJoint && (
           <div className="flex items-center gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 text-xs">
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
-              <span className="size-2 rounded-full bg-blue-500 shrink-0" />
+              <CircleDot className="size-3.5 text-blue-500 shrink-0" />
               <span className="font-medium text-foreground truncate">{fromJoint.label}</span>
             </div>
-            <span className="text-muted-foreground shrink-0">✂️</span>
+            <Scissors className="size-3.5 text-muted-foreground shrink-0" />
             <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
               <span className="font-medium text-foreground truncate">{toJoint.label}</span>
-              <span className="size-2 rounded-full bg-blue-500 shrink-0" />
+              <CircleDot className="size-3.5 text-blue-500 shrink-0" />
             </div>
           </div>
         )}
@@ -112,25 +113,28 @@ export default function SpliceJointModal({
           <div className="grid gap-1.5">
             <Label>Joint Type <span className="text-destructive">*</span></Label>
             <div className="grid grid-cols-3 gap-2">
-              {JOINT_TYPES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setJointType(t.value)}
-                  className={cn(
-                    'flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-center transition-all',
-                    jointType === t.value
-                      ? t.color + ' border-current'
-                      : 'border-border bg-card hover:bg-muted',
-                  )}
-                >
-                  <span className="text-base">{t.label.split(' ')[0]}</span>
-                  <span className="text-[10px] font-semibold leading-tight">
-                    {t.label.split(' ').slice(1).join(' ')}
-                  </span>
-                  <span className="text-[9px] text-muted-foreground leading-tight">{t.desc}</span>
-                </button>
-              ))}
+              {JOINT_TYPES.map((t) => {
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setJointType(t.value)}
+                    className={cn(
+                      'flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-center transition-all',
+                      jointType === t.value
+                        ? t.color + ' border-current'
+                        : 'border-border bg-card hover:bg-muted',
+                    )}
+                  >
+                    <Icon className="size-5 mb-1" />
+                    <span className="text-[12px] font-semibold leading-tight">
+                      {t.label}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground leading-tight">{t.desc}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -163,15 +167,15 @@ export default function SpliceJointModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="splice-cable">Cable Type</Label>
-              <select
-                id="splice-cable"
-                value={cableType}
-                onChange={(e) => setCableType(e.target.value as typeof cableType)}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring"
-              >
-                <option value="Single Mode">Single Mode</option>
-                <option value="Multi Mode">Multi Mode</option>
-              </select>
+              <Select value={cableType} onValueChange={(v) => setCableType(v as 'Single Mode' | 'Multi Mode')}>
+                <SelectTrigger id="splice-cable">
+                  <span className="flex-1 text-left truncate">{cableType || <span className="text-muted-foreground">Select type</span>}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Single Mode" label="Single Mode">Single Mode</SelectItem>
+                  <SelectItem value="Multi Mode" label="Multi Mode">Multi Mode</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="splice-fibers">Fiber Count</Label>
@@ -244,9 +248,9 @@ export default function SpliceJointModal({
           {/* What will happen info */}
           <div className="bg-purple-50 border border-purple-200 rounded-xl px-3 py-2.5 text-xs text-purple-700 space-y-0.5">
             <p className="font-semibold">What happens:</p>
-            <p>• The existing segment is deleted</p>
-            <p>• Two new segments are created on either side of this joint</p>
-            <p>• Distances are auto-calculated from waypoints</p>
+            <div className="flex gap-1.5"><CircleDot className="size-3.5 shrink-0 mt-0.5" /><p>The existing segment is deleted</p></div>
+            <div className="flex gap-1.5"><CircleDot className="size-3.5 shrink-0 mt-0.5" /><p>Two new segments are created on either side of this joint</p></div>
+            <div className="flex gap-1.5"><CircleDot className="size-3.5 shrink-0 mt-0.5" /><p>Distances are auto-calculated from waypoints</p></div>
           </div>
 
           {error && (

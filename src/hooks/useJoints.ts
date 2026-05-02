@@ -82,6 +82,22 @@ export function useJoints(token: string | null) {
     setJoints((prev) => prev.filter((j) => j.id !== id));
   }, [token]);
 
+  const updateJoint = useCallback(async (id: string, payload: Partial<CreateJointPayload>) => {
+    const res = await fetch(`${API_URL}/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to update joint');
+    const raw: RawJoint = await res.json();
+    const updatedJoint = mapJoint(raw);
+    setJoints((prev) => prev.map((j) => (j.id === id ? updatedJoint : j)));
+    return updatedJoint;
+  }, [token]);
+
   // Splice a joint onto an existing segment — splits it into two
   const spliceJoint = useCallback(async (payload: SpliceJointPayload): Promise<{
     spliceJoint: FiberJoint;
@@ -124,5 +140,5 @@ export function useJoints(token: string | null) {
     return () => clearInterval(interval);
   }, [fetchJoints]);
 
-  return { joints, loading, error, createJoint, deleteJoint, spliceJoint, refetch: fetchJoints };
+  return { joints, loading, error, createJoint, updateJoint, deleteJoint, spliceJoint, refetch: fetchJoints };
 }

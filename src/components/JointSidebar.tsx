@@ -4,7 +4,7 @@ import type { JointType } from '../types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Trash2, ChevronDown, ChevronUp, Settings } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronUp, Settings, Route, MapPin, Building2, CircleDot, Circle, Scissors, Edit3 } from 'lucide-react';
 
 type FilterType = 'all' | 'main' | 'sub' | 'splice';
 
@@ -12,6 +12,7 @@ interface SidebarProps {
   joints: FiberJoint[];
   segments: Segment[];
   onFlyTo: (lat: number, lng: number) => void;
+  onEditJoint?: (id: string) => void;
   onDeleteJoint: (id: string) => void;
   onTraceRoute: (fromId: string, toId: string) => void;
   traceMode: boolean;
@@ -20,15 +21,15 @@ interface SidebarProps {
   onOpenSettings: () => void;
 }
 
-const TYPE_CONFIG: Record<JointType, { emoji: string; label: string; dot: string; badge: string }> = {
-  Base:   { emoji: '🏢', label: 'Base',   dot: 'bg-orange-500', badge: 'bg-orange-100 text-orange-700 border-orange-200' },
-  Main:   { emoji: '🔵', label: 'Main',   dot: 'bg-blue-500',   badge: 'bg-blue-100 text-blue-700 border-blue-200' },
-  Sub:    { emoji: '🟡', label: 'Sub',    dot: 'bg-yellow-500', badge: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
-  Splice: { emoji: '🟣', label: 'Splice', dot: 'bg-purple-500', badge: 'bg-purple-100 text-purple-700 border-purple-200' },
+const TYPE_CONFIG: Record<JointType, { icon: React.ElementType; label: string; dot: string; badge: string }> = {
+  Base:   { icon: Building2, label: 'Base',   dot: 'bg-orange-500', badge: 'bg-orange-100 text-orange-700 border-orange-200' },
+  Main:   { icon: CircleDot, label: 'Main',   dot: 'bg-blue-500',   badge: 'bg-blue-100 text-blue-700 border-blue-200' },
+  Sub:    { icon: Circle,    label: 'Sub',    dot: 'bg-yellow-500', badge: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+  Splice: { icon: Scissors,  label: 'Splice', dot: 'bg-purple-500', badge: 'bg-purple-100 text-purple-700 border-purple-200' },
 };
 
 export default function Sidebar({
-  joints, segments, onFlyTo, onDeleteJoint,
+  joints, segments, onFlyTo, onEditJoint, onDeleteJoint,
   onTraceRoute, traceMode, onToggleTraceMode, traceFrom,
   onOpenSettings,
 }: SidebarProps) {
@@ -112,9 +113,9 @@ export default function Sidebar({
         >
           {traceMode
             ? traceFrom
-              ? '🛤️ Now click destination joint...'
-              : '🛤️ Click a start joint below'
-            : '🛤️ Trace Route'}
+              ? <><Route className="size-4 mr-2" /> Now click destination joint...</>
+              : <><Route className="size-4 mr-2" /> Click a start joint below</>
+            : <><Route className="size-4 mr-2" /> Trace Route</>}
         </Button>
       </div>
 
@@ -123,8 +124,8 @@ export default function Sidebar({
         {filteredJoints.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
             <div className="size-16 rounded-2xl bg-muted border border-border flex items-center justify-center mb-4">
-              <span className="text-3xl">
-                {filter === 'main' ? '🔵' : filter === 'sub' ? '🟡' : filter === 'splice' ? '🟣' : '📍'}
+              <span className="text-muted-foreground flex items-center justify-center">
+                {filter === 'main' ? <CircleDot className="size-8" /> : filter === 'sub' ? <Circle className="size-8" /> : filter === 'splice' ? <Scissors className="size-8" /> : <MapPin className="size-8" />}
               </span>
             </div>
             <p className="text-sm text-muted-foreground font-medium">
@@ -176,7 +177,7 @@ export default function Sidebar({
                             'inline-flex items-center px-1.5 py-0 rounded text-[9px] font-medium border shrink-0',
                             typeCfg.badge,
                           )}>
-                            {typeCfg.emoji} {typeCfg.label}
+                            <typeCfg.icon className="size-3 mr-1 shrink-0" /> {typeCfg.label}
                           </span>
                         </div>
 
@@ -207,6 +208,16 @@ export default function Sidebar({
 
                       {/* Actions */}
                       <div className="flex items-center gap-1 shrink-0">
+                        {!traceMode && onEditJoint && (
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-blue-600"
+                            onClick={(e) => { e.stopPropagation(); onEditJoint(joint.id); }}
+                          >
+                            <Edit3 className="size-3.5" />
+                          </Button>
+                        )}
                         {!traceMode && (
                           <Button
                             variant="ghost"
@@ -248,8 +259,9 @@ export default function Sidebar({
                               }}
                             >
                               <div className={cn('size-1.5 rounded-full shrink-0', neighborCfg.dot)} />
-                              <span className="text-foreground font-medium">
-                                {neighborCfg.emoji} {getJointLabel(neighborId)}
+                              <span className="flex items-center gap-1.5 text-foreground font-medium">
+                                <neighborCfg.icon className="size-3 text-muted-foreground shrink-0" />
+                                {getJointLabel(neighborId)}
                               </span>
                               <span className="text-muted-foreground ml-auto shrink-0">
                                 {segment.lengthMeters >= 1000

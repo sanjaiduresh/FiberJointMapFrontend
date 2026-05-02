@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Trash2, Building } from 'lucide-react';
+import { Loader2, Trash2, Building, Building2 } from 'lucide-react';
 
 interface SettingsModalProps {
   baseJoint: FiberJoint | null;
@@ -52,7 +52,7 @@ export default function SettingsModal({ baseJoint, onClose, onDeleteBase, onCrea
             {baseJoint ? (
               <>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>🏢</span>
+                  <Building2 className="size-4 shrink-0" />
                   <span className="font-medium text-foreground">{baseJoint.label}</span>
                 </div>
                 <p className="text-xs text-muted-foreground font-mono">
@@ -87,7 +87,7 @@ export default function SettingsModal({ baseJoint, onClose, onDeleteBase, onCrea
                   </div>
                 </div>
                 <Button type="submit" size="sm" className="w-full" disabled={creating}>
-                  {creating ? <Loader2 className="size-4 animate-spin" /> : '🏢 Set Base Station'}
+                  {creating ? <Loader2 className="size-4 animate-spin" /> : <><Building2 className="size-4 mr-1.5" /> Set Base Station</>}
                 </Button>
               </form>
             )}
