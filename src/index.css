@@ -238,6 +238,16 @@ body,
   transform: scale(0.97);
 }
 
+.popup-btn-blue {
+  background: #3b82f6;
+  color: white;
+  border-color: #2563eb;
+}
+
+.popup-btn-blue:hover {
+  background: #2563eb;
+}
+
 .popup-btn-red {
   background: #ef4444;
   color: white;

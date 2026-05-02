@@ -2,6 +2,10 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import maplibregl, { Map as MapLibreMap } from 'maplibre-gl';
 import type { FiberJoint, Segment } from '../types';
 import type { JointType } from '../types';
+import { createRoot, Root } from 'react-dom/client';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Edit3, Trash2, Scissors } from 'lucide-react';
 
 export const BASE_LAT = 8.336639;
 export const BASE_LNG = 77.869861;
@@ -83,48 +87,71 @@ function getJointSVG(type?: JointType) {
   return JOINT_SVGS[type ?? 'Main'];
 }
 
-// ---------- popup HTML ----------
+// ---------- popup components ----------
 
-function jointHTML(j: FiberJoint) {
+function JointPopup({ j, onEdit, onDelete }: { j: FiberJoint, onEdit: (id: string) => void, onDelete: (id: string) => void }) {
   const typeColors: Record<JointType, string> = {
-    Base: 'badge-orange', Main: 'badge-cyan', Sub: 'badge-yellow', Splice: 'badge-purple',
+    Base: 'bg-orange-100 text-orange-800 border-orange-200',
+    Main: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+    Sub: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+    Splice: 'bg-purple-100 text-purple-800 border-purple-200',
   };
-  const typeColor = typeColors[j.jointType ?? 'Main'] ?? 'badge-cyan';
-  return `<div class="map-popup">
-    <h3 class="popup-title">${j.label}</h3>
-    <div class="popup-badges">
-      <span class="badge ${typeColor}">${j.jointType ?? 'Main'}</span>
-      <span class="badge badge-cyan">${j.cableType}</span>
-      <span class="badge badge-blue">${j.fiberCount} fibers</span>
+  const typeColor = typeColors[j.jointType ?? 'Main'] ?? typeColors.Main;
+
+  return (
+    <div className="p-3 min-w-[220px] flex flex-col gap-2">
+      <h3 className="font-semibold text-[15px] leading-tight pr-4 text-foreground">{j.label}</h3>
+      <div className="flex flex-wrap gap-1.5 mb-1">
+        <Badge variant="outline" className={typeColor}>{j.jointType ?? 'Main'}</Badge>
+        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{j.cableType}</Badge>
+        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{j.fiberCount} fibers</Badge>
+      </div>
+      {j.notes && <p className="text-xs text-muted-foreground line-clamp-2">{j.notes}</p>}
+      <p className="text-[11px] font-mono text-muted-foreground mt-0.5">Loc: {j.lat.toFixed(6)}, {j.lng.toFixed(6)}</p>
+      <div className="text-[11px] text-muted-foreground flex flex-col gap-0.5 mt-0.5">
+        <span>User: {j.createdBy?.userName || 'Unknown'}</span>
+        <span>Added: {fmtDate(j.createdAt)}</span>
+      </div>
+      <div className="flex gap-2 mt-2">
+        <Button variant="default" size="sm" className="flex-1 h-7 text-xs bg-blue-600 hover:bg-blue-700" onClick={() => onEdit(j.id)}>
+          <Edit3 className="size-3.5 mr-1" /> Edit
+        </Button>
+        <Button variant="destructive" size="sm" className="flex-1 h-7 text-xs" onClick={() => onDelete(j.id)}>
+          <Trash2 className="size-3.5 mr-1" /> Delete
+        </Button>
+      </div>
     </div>
-    ${j.notes ? `<p class="popup-notes">${j.notes}</p>` : ''}
-    <p class="popup-coord">Location: ${j.lat.toFixed(6)}, ${j.lng.toFixed(6)}</p>
-    <p class="popup-meta">User: ${j.createdBy?.userName || 'Unknown'}</p>
-    <p class="popup-meta">Added: ${fmtDate(j.createdAt)}</p>
-    <div style="display:flex;gap:4px;margin-top:4px;">
-      <button data-edit-joint="${j.id}" class="popup-btn popup-btn-blue" style="flex:1">Edit</button>
-      <button data-delete-joint="${j.id}" class="popup-btn popup-btn-red" style="flex:1">Delete</button>
-    </div>
-  </div>`;
+  );
 }
 
-function segmentPopupHTML(seg: Segment, fromLabel: string, toLabel: string) {
+function SegmentPopup({ seg, fromLabel, toLabel, onSplice, onDelete }: { seg: Segment, fromLabel: string, toLabel: string, onSplice: (id: string) => void, onDelete: (id: string) => void }) {
   const dist = seg.lengthMeters >= 1000
     ? `${(seg.lengthMeters / 1000).toFixed(2)} km`
     : `${seg.lengthMeters.toFixed(0)} m`;
-  return `<div class="map-popup">
-    <h3 class="popup-title">Cable Segment</h3>
-    <div class="popup-badges">
-      <span class="badge badge-cyan">${seg.cableType}</span>
-      <span class="badge badge-blue">${seg.fiberCount} fibers</span>
+
+  return (
+    <div className="p-3 min-w-[220px] flex flex-col gap-2">
+      <h3 className="font-semibold text-[15px] leading-tight pr-4 text-foreground">Cable Segment</h3>
+      <div className="flex flex-wrap gap-1.5 mb-1">
+        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{seg.cableType}</Badge>
+        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{seg.fiberCount} fibers</Badge>
+      </div>
+      <p className="text-sm text-foreground">Length: <strong className="font-semibold">{dist}</strong></p>
+      <div className="text-[11px] text-muted-foreground flex flex-col gap-0.5">
+        <p>From: <strong className="font-medium text-foreground">{fromLabel}</strong></p>
+        <p>To: <strong className="font-medium text-foreground">{toLabel}</strong></p>
+        <p className="mt-1">User: {seg.createdBy?.userName || 'Unknown'}</p>
+      </div>
+      <div className="flex flex-col gap-1.5 mt-2">
+        <Button variant="secondary" size="sm" className="w-full h-7 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200" onClick={() => onSplice(seg.id)}>
+          <Scissors className="size-3.5 mr-1.5" /> Add Splice Here
+        </Button>
+        <Button variant="destructive" size="sm" className="w-full h-7 text-xs" onClick={() => onDelete(seg.id)}>
+          <Trash2 className="size-3.5 mr-1.5" /> Delete Segment
+        </Button>
+      </div>
     </div>
-    <p class="popup-notes">Length: <strong>${dist}</strong></p>
-    <p class="popup-coord">From: <strong>${fromLabel}</strong></p>
-    <p class="popup-coord">To: <strong>${toLabel}</strong></p>
-    <p class="popup-meta">User: ${seg.createdBy?.userName || 'Unknown'}</p>
-    <button data-splice-segment="${seg.id}" class="popup-btn popup-btn-purple">Add Splice Here</button>
-    <button data-delete-segment="${seg.id}" class="popup-btn popup-btn-red" style="margin-top:4px">Delete Segment</button>
-  </div>`;
+  );
 }
 
 // ---------- types ----------
@@ -179,11 +206,13 @@ export default function MapView({
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
 
   const jMarkers = useRef(new Map<string, maplibregl.Marker>());
+  const jRoots = useRef(new Map<string, Root>());
   const wpMarkers = useRef<maplibregl.Marker[]>([]);
   const liveMarker = useRef<maplibregl.Marker | null>(null);
   const spliceMarkerRef = useRef<maplibregl.Marker | null>(null);
   const placementMarkerRef = useRef<maplibregl.Marker | null>(null);
   const segmentPopup = useRef<maplibregl.Popup | null>(null);
+  const segmentPopupRoot = useRef<Root | null>(null);
   const suppressClick = useRef(false);
 
   const cbEdit = useRef(onEditJoint); cbEdit.current = onEditJoint;
@@ -326,17 +355,50 @@ export default function MapView({
         const fromLabel = e.features[0].properties?.fromLabel as string ?? 'Unknown';
         const toLabel = e.features[0].properties?.toLabel as string ?? 'Unknown';
 
+        if (segmentPopupRoot.current) {
+          segmentPopupRoot.current.unmount();
+          segmentPopupRoot.current = null;
+        }
+
+        const container = document.createElement('div');
+        const root = createRoot(container);
+        segmentPopupRoot.current = root;
+
+        root.render(
+          <SegmentPopup
+            seg={seg}
+            fromLabel={fromLabel}
+            toLabel={toLabel}
+            onSplice={(id) => {
+              segmentPopup.current?.remove();
+              suppressClick.current = true;
+              setTimeout(() => { suppressClick.current = false; }, 100);
+              cbSplice.current?.(id, clickLat, clickLng);
+            }}
+            onDelete={(id) => {
+              segmentPopup.current?.remove();
+              cbDeleteSeg.current?.(id);
+            }}
+          />
+        );
+
         const popup = new maplibregl.Popup({
           maxWidth: '300px',
           className: 'ft-popup',
           offset: [0, -8],
         })
           .setLngLat([clickLng, clickLat])
-          .setHTML(segmentPopupHTML(seg, fromLabel, toLabel))
+          .setDOMContent(container)
           .addTo(map);
 
         popup.on('close', () => {
           setSelectedSegmentId(null);
+          if (segmentPopupRoot.current) {
+            setTimeout(() => {
+              segmentPopupRoot.current?.unmount();
+              segmentPopupRoot.current = null;
+            }, 0);
+          }
         });
 
         segmentPopup.current = popup;
@@ -370,43 +432,7 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── EVENT DELEGATION for popup buttons ──
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const h = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-
-      const ej = t.closest<HTMLElement>('[data-edit-joint]');
-      if (ej) { cbEdit.current?.(ej.dataset.editJoint!); return; }
-
-      const dj = t.closest<HTMLElement>('[data-delete-joint]');
-      if (dj) { cbDelete.current(dj.dataset.deleteJoint!); return; }
-
-      const ds = t.closest<HTMLElement>('[data-delete-segment]');
-      if (ds) {
-        segmentPopup.current?.remove();
-        cbDeleteSeg.current?.(ds.dataset.deleteSegment!);
-        return;
-      }
-
-      const sp = t.closest<HTMLElement>('[data-splice-segment]');
-      if (sp) {
-        const segId = sp.dataset.spliceSegment!;
-        const popup = segmentPopup.current;
-        if (popup) {
-          const lngLat = popup.getLngLat();
-          segmentPopup.current?.remove();
-          suppressClick.current = true;
-          setTimeout(() => { suppressClick.current = false; }, 100);
-          cbSplice.current?.(segId, lngLat.lat, lngLat.lng);
-        }
-        return;
-      }
-    };
-    el.addEventListener('click', h);
-    return () => el.removeEventListener('click', h);
-  }, []);
+  // ── EVENT DELEGATION (Removed, replaced by React onClick handlers) ──
 
   // ── SYNC JOINT MARKERS ──
   useEffect(() => {
@@ -416,26 +442,46 @@ export default function MapView({
     const ids = new Set(joints.map(j => j.id));
 
     for (const [id, m] of curr) {
-      if (!ids.has(id)) { m.remove(); curr.delete(id); }
+      if (!ids.has(id)) {
+        m.remove();
+        curr.delete(id);
+        jRoots.current.get(id)?.unmount();
+        jRoots.current.delete(id);
+      }
     }
 
     for (const j of joints) {
       const { svg, w, h, offset } = getJointSVG(j.jointType);
       const ex = curr.get(j.id);
+      
+      const popupContent = (
+        <JointPopup 
+          j={j} 
+          onEdit={(id) => cbEdit.current?.(id)} 
+          onDelete={(id) => cbDelete.current(id)} 
+        />
+      );
+
       if (ex) {
         ex.setLngLat([j.lng, j.lat]);
-        ex.getPopup()?.setHTML(jointHTML(j));
+        jRoots.current.get(j.id)?.render(popupContent);
         const newEl = mkEl(svg, w, h, suppressClick);
         ex.getElement().replaceChildren(...Array.from(newEl.childNodes));
         ex.getElement().style.width = `${w}px`;
         ex.getElement().style.height = `${h}px`;
       } else {
         const el = mkEl(svg, w, h, suppressClick);
+        const container = document.createElement('div');
+        const root = createRoot(container);
+        root.render(popupContent);
+        jRoots.current.set(j.id, root);
+
         const popup = new maplibregl.Popup({
           offset: [0, -offset],
           maxWidth: '300px',
           className: 'ft-popup',
-        }).setHTML(jointHTML(j));
+        }).setDOMContent(container);
+        
         curr.set(j.id,
           new maplibregl.Marker({ element: el, anchor: 'bottom' })
             .setLngLat([j.lng, j.lat])

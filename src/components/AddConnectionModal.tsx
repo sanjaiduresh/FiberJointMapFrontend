@@ -3,12 +3,15 @@ import type { CreateSegmentPayload, FiberJoint } from '../types';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Link, Loader2, AlertCircle, MapIcon, AlertTriangle, Ruler, Type, CornerUpRight } from 'lucide-react';
+import { Link, Loader2, AlertCircle, MapIcon, AlertTriangle, Ruler, Type, CornerUpRight, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface AddConnectionModalProps {
   joints: FiberJoint[];
@@ -46,7 +49,7 @@ function calcRouteDistance(
 
 export default function AddConnectionModal({
   joints, onSubmit, onClose,
-  onPickWaypoints, pendingWaypoints, waypointsDone: _waypointsDone, onResetWaypointsDone, pendingConnection,
+  onPickWaypoints, pendingWaypoints, onResetWaypointsDone, pendingConnection,
 }: AddConnectionModalProps) {
   const [fromJointId, setFromJointId] = useState(pendingConnection?.fromJointId || (joints.length > 0 ? joints[0].id : ''));
   const [toJointId, setToJointId] = useState(pendingConnection?.toJointId || (joints.length > 1 ? joints[1].id : ''));
@@ -56,6 +59,9 @@ export default function AddConnectionModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [routeType, setRouteType] = useState<'direct' | 'custom'>(pendingWaypoints.length > 0 ? 'custom' : 'direct');
+  
+  const [fromOpen, setFromOpen] = useState(false);
+  const [toOpen, setToOpen] = useState(false);
 
   const fromJoint = joints.find((j) => j.id === fromJointId);
   const toJoint = joints.find((j) => j.id === toJointId);
@@ -114,47 +120,107 @@ export default function AddConnectionModal({
               {/* From Joint */}
               <div className="grid gap-1.5">
                 <Label htmlFor="conn-from">From Joint <span className="text-destructive">*</span></Label>
-                <Select value={fromJointId} onValueChange={(v) => setFromJointId(v || '')}>
-                  <SelectTrigger id="conn-from">
-                    {fromJoint ? (
-                      <span className="flex-1 text-left truncate">
-                        {fromJoint.label} ({fromJoint.cableType}, {fromJoint.fiberCount} fibers)
-                      </span>
-                    ) : (
-                      <SelectValue placeholder="Select from joint" />
-                    )}
-                  </SelectTrigger>
-                  <SelectContent>
-                    {joints.map((j) => (
-                      <SelectItem key={j.id} value={j.id} label={j.label}>
-                        {j.label} ({j.cableType}, {j.fiberCount} fibers)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={fromOpen} onOpenChange={setFromOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="conn-from"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={fromOpen}
+                      className="justify-between font-normal"
+                    >
+                      {fromJoint ? (
+                        <span className="truncate">
+                          {fromJoint.label} ({fromJoint.cableType}, {fromJoint.fiberCount} fibers)
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Select from joint...</span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search joint..." />
+                      <CommandList>
+                        <CommandEmpty>No joint found.</CommandEmpty>
+                        <CommandGroup>
+                          {joints.map((j) => (
+                            <CommandItem
+                              key={j.id}
+                              value={`${j.label} ${j.id}`}
+                              onSelect={() => {
+                                setFromJointId(j.id);
+                                setFromOpen(false);
+                              }}
+                            >
+                              <span className="truncate flex-1">{j.label} ({j.cableType}, {j.fiberCount} fibers)</span>
+                              <Check
+                                className={cn(
+                                  "ml-2 h-4 w-4 shrink-0",
+                                  fromJointId === j.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {/* To Joint */}
               <div className="grid gap-1.5">
                 <Label htmlFor="conn-to">To Joint <span className="text-destructive">*</span></Label>
-                <Select value={toJointId} onValueChange={(v) => setToJointId(v || '')}>
-                  <SelectTrigger id="conn-to">
-                    {toJoint ? (
-                      <span className="flex-1 text-left truncate">
-                        {toJoint.label} ({toJoint.cableType}, {toJoint.fiberCount} fibers)
-                      </span>
-                    ) : (
-                      <SelectValue placeholder="Select to joint" />
-                    )}
-                  </SelectTrigger>
-                  <SelectContent>
-                    {joints.map((j) => (
-                      <SelectItem key={j.id} value={j.id} label={j.label}>
-                        {j.label} ({j.cableType}, {j.fiberCount} fibers)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={toOpen} onOpenChange={setToOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="conn-to"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={toOpen}
+                      className="justify-between font-normal"
+                    >
+                      {toJoint ? (
+                        <span className="truncate">
+                          {toJoint.label} ({toJoint.cableType}, {toJoint.fiberCount} fibers)
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Select to joint...</span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search joint..." />
+                      <CommandList>
+                        <CommandEmpty>No joint found.</CommandEmpty>
+                        <CommandGroup>
+                          {joints.map((j) => (
+                            <CommandItem
+                              key={j.id}
+                              value={`${j.label} ${j.id}`}
+                              onSelect={() => {
+                                setToJointId(j.id);
+                                setToOpen(false);
+                              }}
+                            >
+                              <span className="truncate flex-1">{j.label} ({j.cableType}, {j.fiberCount} fibers)</span>
+                              <Check
+                                className={cn(
+                                  "ml-2 h-4 w-4 shrink-0",
+                                  toJointId === j.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {/* Cable Type + Fiber Count */}

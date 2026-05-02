@@ -18,7 +18,7 @@ import type { Segment, CreateJointPayload } from './types';
 import {
   PanelLeftClose, PanelLeftOpen, Building, Locate,
   MapPin, Plus, Link, X, Undo2, Check, Loader2, LogOut,
-  Map as MapIcon, Settings, Trash2, Scissors,
+  Map as MapIcon, Settings, Trash2, Scissors, Circle, CircleDot,
 } from 'lucide-react';
 import SpliceJointModal from './components/SpliceJointModal';
 import EditJointModal from './components/EditJointModal';
@@ -397,18 +397,20 @@ export default function App() {
       )}
 
       {/* Sidebar joint list */}
-      <Sidebar
-        joints={filteredJoints}
-        segments={segments}
-        onFlyTo={handleFlyTo}
-        onEditJoint={setEditingJointId}
-        onDeleteJoint={handleDeleteJoint}
-        onTraceRoute={handleTraceRoute}
-        traceMode={traceMode}
-        onToggleTraceMode={handleToggleTrace}
-        traceFrom={traceFrom}
-        onOpenSettings={() => setSettingsOpen(true)}
-      />
+      <div className="flex-1 overflow-hidden">
+        <Sidebar
+          joints={filteredJoints}
+          segments={segments}
+          onFlyTo={handleFlyTo}
+          onEditJoint={setEditingJointId}
+          onDeleteJoint={handleDeleteJoint}
+          onTraceRoute={handleTraceRoute}
+          traceMode={traceMode}
+          onToggleTraceMode={handleToggleTrace}
+          traceFrom={traceFrom}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      </div>
     </div>
   );
 
@@ -999,14 +1001,14 @@ export default function App() {
               </p>
               <div className="space-y-2">
                 {[
-                  { type: 'Base', emoji: '🏢', dot: 'bg-orange-500', desc: 'ISP central / head-end' },
-                  { type: 'Main', emoji: '🔵', dot: 'bg-blue-500', desc: 'Primary distribution joint' },
-                  { type: 'Sub', emoji: '🟡', dot: 'bg-yellow-500', desc: 'Sub-distribution joint' },
-                  { type: 'Splice', emoji: '🟣', dot: 'bg-purple-500', desc: 'Mid-cable splice point' },
-                ].map(({ type, emoji, dot, desc }) => (
+                  { type: 'Base', icon: Building, iconColor: 'text-orange-500', dot: 'bg-orange-500', desc: 'ISP central / head-end' },
+                  { type: 'Main', icon: CircleDot, iconColor: 'text-blue-500', dot: 'bg-blue-500', desc: 'Primary distribution joint' },
+                  { type: 'Sub', icon: Circle, iconColor: 'text-yellow-500', dot: 'bg-yellow-500', desc: 'Sub-distribution joint' },
+                  { type: 'Splice', icon: Scissors, iconColor: 'text-purple-500', dot: 'bg-purple-500', desc: 'Mid-cable splice point' },
+                ].map(({ type, icon: Icon, iconColor, dot, desc }) => (
                   <div key={type} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted border border-border">
                     <div className={cn('size-2.5 rounded-full shrink-0', dot)} />
-                    <span className="text-base">{emoji}</span>
+                    <Icon className={cn("size-4 shrink-0", iconColor)} />
                     <div>
                       <p className="text-xs font-medium text-foreground">{type}</p>
                       <p className="text-[10px] text-muted-foreground">{desc}</p>
