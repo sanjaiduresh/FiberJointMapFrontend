@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Trash2, Building, Building2 } from 'lucide-react';
+import { Loader2, Trash2, Building, Building2, Navigation } from 'lucide-react';
 
 interface SettingsModalProps {
   baseJoint: FiberJoint | null;
@@ -55,9 +55,18 @@ export default function SettingsModal({ baseJoint, onClose, onDeleteBase, onCrea
                   <Building2 className="size-4 shrink-0" />
                   <span className="font-medium text-foreground">{baseJoint.label}</span>
                 </div>
-                <p className="text-xs text-muted-foreground font-mono">
+                <p className="text-xs text-muted-foreground font-mono mb-2">
                   {baseJoint.lat.toFixed(6)}, {baseJoint.lng.toFixed(6)}
                 </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mb-2"
+                  onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${baseJoint.lat},${baseJoint.lng}`, '_blank')}
+                >
+                  <Navigation className="size-4 mr-2" />
+                  Get Direction
+                </Button>
                 <Button
                   variant="destructive"
                   size="sm"

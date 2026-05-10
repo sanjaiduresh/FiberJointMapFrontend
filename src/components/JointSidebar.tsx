@@ -4,7 +4,7 @@ import type { JointType } from '../types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Trash2, ChevronDown, ChevronUp, Settings, Route, MapPin, Building2, CircleDot, Circle, Scissors, Edit3 } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronUp, Settings, Route, MapPin, Building2, CircleDot, Circle, Scissors, Edit3, Navigation } from 'lucide-react';
 
 type FilterType = 'all' | 'main' | 'sub' | 'splice';
 
@@ -208,6 +208,17 @@ export default function Sidebar({
 
                       {/* Actions */}
                       <div className="flex items-center gap-1 shrink-0">
+                        {!traceMode && (
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-blue-600"
+                            title="Get Direction"
+                            onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/maps/dir/?api=1&destination=${joint.lat},${joint.lng}`, '_blank'); }}
+                          >
+                            <Navigation className="size-3.5" />
+                          </Button>
+                        )}
                         {!traceMode && onEditJoint && (
                           <Button
                             variant="ghost"

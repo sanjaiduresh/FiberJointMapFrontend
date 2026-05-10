@@ -121,7 +121,7 @@ export default function AddConnectionModal({
               <div className="grid gap-1.5">
                 <Label htmlFor="conn-from">From Joint <span className="text-destructive">*</span></Label>
                 <Popover open={fromOpen} onOpenChange={setFromOpen}>
-                  <PopoverTrigger asChild>
+                  <PopoverTrigger render={
                     <Button
                       id="conn-from"
                       variant="outline"
@@ -138,7 +138,7 @@ export default function AddConnectionModal({
                       )}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
-                  </PopoverTrigger>
+                  } />
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                     <Command>
                       <CommandInput placeholder="Search joint..." />
@@ -174,7 +174,7 @@ export default function AddConnectionModal({
               <div className="grid gap-1.5">
                 <Label htmlFor="conn-to">To Joint <span className="text-destructive">*</span></Label>
                 <Popover open={toOpen} onOpenChange={setToOpen}>
-                  <PopoverTrigger asChild>
+                  <PopoverTrigger render={
                     <Button
                       id="conn-to"
                       variant="outline"
@@ -191,7 +191,7 @@ export default function AddConnectionModal({
                       )}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
-                  </PopoverTrigger>
+                  } />
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                     <Command>
                       <CommandInput placeholder="Search joint..." />

@@ -6,8 +6,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertCircle, Loader2, Edit3, Building2, CircleDot, Circle, Scissors, MapPin } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { AlertCircle, Loader2, Edit3, Building2, CircleDot, Circle, Scissors, MapPin, Navigation } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 
@@ -158,15 +158,26 @@ export default function EditJointModal({
           
           <div className="grid gap-1.5 pt-1">
             <Label>Location</Label>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-start text-muted-foreground hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50"
-              onClick={onMoveLocation}
-            >
-              <MapPin className="size-4 mr-2" />
-              Move Location on Map
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 justify-start text-muted-foreground hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50"
+                onClick={onMoveLocation}
+              >
+                <MapPin className="size-4 mr-2 shrink-0" />
+                <span className="truncate">Move Location</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 justify-start text-muted-foreground hover:text-green-600 hover:border-green-200 hover:bg-green-50"
+                onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${joint.lat},${joint.lng}`, '_blank')}
+              >
+                <Navigation className="size-4 mr-2 shrink-0" />
+                <span className="truncate">Get Direction</span>
+              </Button>
+            </div>
           </div>
 
           {error && (

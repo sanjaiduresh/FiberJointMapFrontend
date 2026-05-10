@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import maplibregl, { Map as MapLibreMap } from 'maplibre-gl';
 import type { FiberJoint, Segment } from '../types';
 import type { JointType } from '../types';
-import { createRoot, Root } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
+import type { Root } from 'react-dom/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit3, Trash2, Scissors } from 'lucide-react';
+import { Edit3, Trash2, Scissors, Navigation } from 'lucide-react';
 
 export const BASE_LAT = 8.336639;
 export const BASE_LNG = 77.869861;
@@ -112,12 +113,17 @@ function JointPopup({ j, onEdit, onDelete }: { j: FiberJoint, onEdit: (id: strin
         <span>User: {j.createdBy?.userName || 'Unknown'}</span>
         <span>Added: {fmtDate(j.createdAt)}</span>
       </div>
-      <div className="flex gap-2 mt-2">
-        <Button variant="default" size="sm" className="flex-1 h-7 text-xs bg-blue-600 hover:bg-blue-700" onClick={() => onEdit(j.id)}>
-          <Edit3 className="size-3.5 mr-1" /> Edit
-        </Button>
-        <Button variant="destructive" size="sm" className="flex-1 h-7 text-xs" onClick={() => onDelete(j.id)}>
-          <Trash2 className="size-3.5 mr-1" /> Delete
+      <div className="flex flex-col gap-1.5 mt-2">
+        <div className="flex gap-2">
+          <Button variant="default" size="sm" className="flex-1 h-7 text-xs bg-blue-600 hover:bg-blue-700" onClick={() => onEdit(j.id)}>
+            <Edit3 className="size-3.5 mr-1" /> Edit
+          </Button>
+          <Button variant="destructive" size="sm" className="flex-1 h-7 text-xs" onClick={() => onDelete(j.id)}>
+            <Trash2 className="size-3.5 mr-1" /> Delete
+          </Button>
+        </div>
+        <Button variant="outline" size="sm" className="w-full h-7 text-xs" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${j.lat},${j.lng}`, '_blank')}>
+          <Navigation className="size-3.5 mr-1" /> Get Direction
         </Button>
       </div>
     </div>
