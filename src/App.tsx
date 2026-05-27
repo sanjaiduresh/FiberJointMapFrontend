@@ -78,7 +78,8 @@ export default function App() {
     createJoint, deleteJoint, spliceJoint, updateJoint,
     approveJoint, rejectJoint,
     refetch: refetchApprovedJoints,
-  } = useJoints(token, 'APPROVED');
+    uploadJointPhoto, deleteJointPhoto,
+  } = useJoints(token, 'APPROVED,PENDING_EDIT,PENDING_DELETE');
 
   // Draft map: ALL items (no filter)
   const {
@@ -91,7 +92,7 @@ export default function App() {
     createSegment, deleteSegment, applySplice,
     approveSegment, rejectSegment,
     refetch: refetchApprovedSegments,
-  } = useSegments(token, 'APPROVED');
+  } = useSegments(token, 'APPROVED,PENDING_EDIT,PENDING_DELETE');
 
   const {
     segments: allSegments, loading: draftSegLoading, error: draftSegError,
@@ -99,8 +100,17 @@ export default function App() {
   } = useSegments(token);
 
   // Active data based on map mode
-  const joints = isDraftMap ? allJoints : approvedJoints;
-  const segments = isDraftMap ? allSegments : approvedSegments;
+  const joints = useMemo(() => {
+    const rawJoints = isDraftMap ? allJoints : approvedJoints;
+    if (!isDraftMap) return rawJoints;
+    return rawJoints.map(j => (j.pendingEdits ? { ...j, ...j.pendingEdits } : j));
+  }, [isDraftMap, allJoints, approvedJoints]);
+
+  const segments = useMemo(() => {
+    const rawSegments = isDraftMap ? allSegments : approvedSegments;
+    if (!isDraftMap) return rawSegments;
+    return rawSegments.map(s => (s.pendingEdits ? { ...s, ...s.pendingEdits } : s));
+  }, [isDraftMap, allSegments, approvedSegments]);
   const jointsLoading = isDraftMap ? draftJointsLoading : ajLoading;
   const segmentsLoading = isDraftMap ? draftSegLoading : asLoading;
   const jointsError = isDraftMap ? draftJointsError : ajError;
@@ -757,7 +767,12 @@ export default function App() {
                   if (!placementData || !placementPos) return;
                   setPlacementIsSaving(true);
                   try {
-                    await createJoint({ ...placementData, lat: placementPos.lat, lng: placementPos.lng });
+                    const newJoint = await createJoint({ ...placementData, lat: placementPos.lat, lng: placementPos.lng });
+                    if (placementData.pendingPhotos && placementData.pendingPhotos.length > 0) {
+                      for (const file of placementData.pendingPhotos) {
+                        await uploadJointPhoto(newJoint.id, file);
+                      }
+                    }
                     showToast('Joint added!');
                     setPlacementMode(false);
                     setPlacementData(null);
@@ -959,6 +974,14 @@ export default function App() {
             showToast('Drag the marker to the new location.');
             handleFlyTo(editingJoint.lat, editingJoint.lng);
           }}
+          onUploadPhoto={async (file) => {
+            await uploadJointPhoto(editingJoint.id, file);
+            showToast('Photo uploaded!');
+          }}
+          onDeletePhoto={async (publicId) => {
+            await deleteJointPhoto(editingJoint.id, publicId);
+            showToast('Photo deleted');
+          }}
           onClose={() => setEditingJointId(null)}
         />
       )}
@@ -1000,6 +1023,11 @@ export default function App() {
           onSubmit={async (payload) => {
             const result = await spliceJoint(payload);
             applySplice(result.deletedSegmentId, result.segmentA, result.segmentB);
+            if (payload.pendingPhotos && payload.pendingPhotos.length > 0) {
+              for (const file of payload.pendingPhotos) {
+                await uploadJointPhoto(result.spliceJoint.id, file);
+              }
+            }
             showToast(`Splice joint "${payload.label}" added`);
             resetSpliceState();
           }}

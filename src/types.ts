@@ -1,11 +1,17 @@
 // === Approval Status ===
-export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'PENDING_EDIT' | 'PENDING_DELETE';
 
 // === Role Types ===
 export type UserRole = 'ADMIN' | 'OWNER' | 'EMPLOYEE';
 
 // === Joint Types ===
 export type JointType = 'Base' | 'Main' | 'Sub' | 'Splice';
+
+export interface JointPhoto {
+  url: string;
+  publicId: string;
+  uploadedAt: string;
+}
 
 export interface FiberJoint {
   id: string;
@@ -16,8 +22,11 @@ export interface FiberJoint {
   fiberCount: number;
   lat: number;
   lng: number;
+  organizationId: string;
   createdBy: { userId: string; userName: string };
   approvalStatus: ApprovalStatus;
+  pendingEdits?: Partial<FiberJoint>;
+  photos: JointPhoto[];
   createdAt: string;
 }
 
@@ -29,6 +38,7 @@ export interface CreateJointPayload {
   fiberCount: number;
   lat: number;
   lng: number;
+  pendingPhotos?: File[];
 }
 
 // === Segment Types ===
@@ -40,8 +50,10 @@ export interface Segment {
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
   lengthMeters: number;
+  organizationId: string;
   createdBy: { userId: string; userName: string };
   approvalStatus: ApprovalStatus;
+  pendingEdits?: Partial<Segment>;
   createdAt: string;
 }
 
@@ -63,6 +75,7 @@ export interface SpliceJointPayload {
   fiberCount: number;
   lat: number;
   lng: number;
+  pendingPhotos?: File[];
 }
 
 // === Auth Types ===

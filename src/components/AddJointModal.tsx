@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import { AlertCircle, MapPin, Building2, CircleDot, Circle, Scissors } from 'lucide-react';
+import { AlertCircle, MapPin, Building2, CircleDot, Circle, Scissors, Camera, Upload, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 
@@ -35,6 +35,15 @@ export default function AddJointModal({
   const [cableType, setCableType] = useState<'Single Mode' | 'Multi Mode'>('Single Mode');
   const [fiberCount, setFiberCount] = useState(12);
   const [error, setError] = useState('');
+  const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPendingPhotos(prev => [...prev, file]);
+    }
+    e.target.value = '';
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +55,7 @@ export default function AddJointModal({
       jointType,
       cableType,
       fiberCount,
+      pendingPhotos,
     });
     onClose();
   };
@@ -146,8 +156,42 @@ export default function AddJointModal({
               />
             </div>
           </div>
+          {/* Photos Section */}
+          <div className="grid gap-2 pt-1">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-1.5">
+                <Camera className="size-4 text-muted-foreground" />
+                Photos ({pendingPhotos.length})
+              </Label>
+              <div className="flex gap-1.5">
+                <label className="flex h-7 items-center gap-1 cursor-pointer rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground">
+                  <Camera className="size-3" /> Take Photo
+                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
+                </label>
+                <label className="flex h-7 items-center gap-1 cursor-pointer rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground">
+                  <Upload className="size-3" /> Upload
+                  <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                </label>
+              </div>
+            </div>
 
-
+            {pendingPhotos.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {pendingPhotos.map((file, i) => (
+                  <div key={i} className="relative shrink-0 size-16 rounded-md border border-border overflow-hidden group">
+                    <img src={URL.createObjectURL(file)} alt="preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setPendingPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                      className="absolute top-1 right-1 size-5 rounded-full bg-red-500 text-white flex items-center justify-center transition-colors hover:bg-red-600 cursor-pointer shadow-sm"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {error && (
             <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-lg px-3 py-2">

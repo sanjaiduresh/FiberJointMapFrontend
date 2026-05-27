@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit3, Trash2, Scissors, Navigation, Layers } from 'lucide-react';
+import { Edit3, Trash2, Scissors, Navigation, Layers, X } from 'lucide-react';
 
 export const BASE_LAT = 8.336639;
 export const BASE_LNG = 77.869861;
@@ -90,7 +90,7 @@ function getJointSVG(type?: JointType) {
 
 // ---------- popup components ----------
 
-function JointPopup({ j, onEdit, onDelete, onApprove, onReject, userRole }: { j: FiberJoint, onEdit: (id: string) => void, onDelete: (id: string) => void, onApprove?: (id: string) => void, onReject?: (id: string) => void, userRole?: UserRole | null }) {
+function JointPopup({ j, onEdit, onDelete, onApprove, onReject, onPhotoClick, userRole }: { j: FiberJoint, onEdit: (id: string) => void, onDelete: (id: string) => void, onApprove?: (id: string) => void, onReject?: (id: string) => void, onPhotoClick?: (url: string) => void, userRole?: UserRole | null }) {
   const typeColors: Record<JointType, string> = {
     Base: 'bg-orange-100 text-orange-800 border-orange-200',
     Main: 'bg-cyan-100 text-cyan-800 border-cyan-200',
@@ -100,13 +100,20 @@ function JointPopup({ j, onEdit, onDelete, onApprove, onReject, userRole }: { j:
   const typeColor = typeColors[j.jointType ?? 'Main'] ?? typeColors.Main;
   const isOwner = userRole === 'OWNER';
   const isPending = j.approvalStatus === 'PENDING';
+  const photos = j.photos || [];
 
   return (
     <div className="p-3 min-w-[220px] flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <h3 className="font-semibold text-[15px] leading-tight pr-4 text-foreground">{j.label}</h3>
-        {isPending && (
-          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Pending</Badge>
+        {j.approvalStatus === 'PENDING' && (
+          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Pending Creation</Badge>
+        )}
+        {j.approvalStatus === 'PENDING_EDIT' && (
+          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Pending Edit</Badge>
+        )}
+        {j.approvalStatus === 'PENDING_DELETE' && (
+          <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200 text-[10px]">Pending Delete</Badge>
         )}
       </div>
       <div className="flex flex-wrap gap-1.5 mb-1">
@@ -115,6 +122,25 @@ function JointPopup({ j, onEdit, onDelete, onApprove, onReject, userRole }: { j:
         <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{j.fiberCount} fibers</Badge>
       </div>
       {j.notes && <p className="text-xs text-muted-foreground line-clamp-2">{j.notes}</p>}
+      {/* Photo Thumbnails */}
+      {photos.length > 0 && (
+        <div className="flex gap-1.5 mt-0.5">
+          {photos.slice(0, 3).map((photo, i) => (
+            <button key={photo.publicId} type="button" onClick={() => onPhotoClick?.(photo.url)} className="block focus:outline-none">
+              <img
+                src={photo.url}
+                alt={`Photo ${i + 1}`}
+                className="w-14 h-14 rounded-md object-cover border border-border hover:opacity-80 transition-opacity cursor-pointer"
+              />
+            </button>
+          ))}
+          {photos.length > 3 && (
+            <div className="w-14 h-14 rounded-md bg-muted border border-border flex items-center justify-center text-xs font-semibold text-muted-foreground">
+              +{photos.length - 3}
+            </div>
+          )}
+        </div>
+      )}
       <p className="text-[11px] font-mono text-muted-foreground mt-0.5">Loc: {j.lat.toFixed(6)}, {j.lng.toFixed(6)}</p>
       <div className="text-[11px] text-muted-foreground flex flex-col gap-0.5 mt-0.5">
         <span>User: {j.createdBy?.userName || 'Unknown'}</span>
@@ -122,26 +148,26 @@ function JointPopup({ j, onEdit, onDelete, onApprove, onReject, userRole }: { j:
       </div>
       <div className="flex flex-col gap-1.5 mt-2">
         <div className="flex gap-2">
-          <Button variant="default" size="sm" className="flex-1 h-7 text-xs bg-blue-600 hover:bg-blue-700" onClick={() => onEdit(j.id)}>
+          <Button variant="default" size="sm" className="flex-1 h-7 text-xs bg-blue-600 hover:bg-blue-700 cursor-pointer" onClick={() => onEdit(j.id)}>
             <Edit3 className="size-3.5 mr-1" /> Edit
           </Button>
           {isOwner && (
-            <Button variant="destructive" size="sm" className="flex-1 h-7 text-xs" onClick={() => onDelete(j.id)}>
+            <Button variant="destructive" size="sm" className="flex-1 h-7 text-xs cursor-pointer" onClick={() => onDelete(j.id)}>
               <Trash2 className="size-3.5 mr-1" /> Delete
             </Button>
           )}
         </div>
-        {isPending && isOwner && (
+        {['PENDING', 'PENDING_EDIT', 'PENDING_DELETE'].includes(j.approvalStatus) && isOwner && (
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] text-green-700 border-green-300 hover:bg-green-50" onClick={() => onApprove?.(j.id)}>
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] text-green-700 border-green-300 hover:bg-green-50 cursor-pointer" onClick={() => onApprove?.(j.id)}>
               Approve
             </Button>
-            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] text-red-700 border-red-300 hover:bg-red-50" onClick={() => onReject?.(j.id)}>
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] text-red-700 border-red-300 hover:bg-red-50 cursor-pointer" onClick={() => onReject?.(j.id)}>
               Reject
             </Button>
           </div>
         )}
-        <Button variant="outline" size="sm" className="w-full h-7 text-xs" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${j.lat},${j.lng}`, '_blank')}>
+        <Button variant="outline" size="sm" className="w-full h-7 text-xs cursor-pointer" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${j.lat},${j.lng}`, '_blank')}>
           <Navigation className="size-3.5 mr-1" /> Get Direction
         </Button>
       </div>
@@ -160,8 +186,14 @@ function SegmentPopup({ seg, fromLabel, toLabel, onSplice, onDelete, onApprove, 
     <div className="p-3 min-w-[220px] flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <h3 className="font-semibold text-[15px] leading-tight pr-4 text-foreground">Cable Segment</h3>
-        {isPending && (
-          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Pending</Badge>
+        {seg.approvalStatus === 'PENDING' && (
+          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Pending Creation</Badge>
+        )}
+        {seg.approvalStatus === 'PENDING_EDIT' && (
+          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Pending Edit</Badge>
+        )}
+        {seg.approvalStatus === 'PENDING_DELETE' && (
+          <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200 text-[10px]">Pending Delete</Badge>
         )}
       </div>
       <div className="flex flex-wrap gap-1.5 mb-1">
@@ -183,7 +215,7 @@ function SegmentPopup({ seg, fromLabel, toLabel, onSplice, onDelete, onApprove, 
             <Trash2 className="size-3.5 mr-1.5" /> Delete Segment
           </Button>
         )}
-        {isPending && isOwner && (
+        {['PENDING', 'PENDING_EDIT', 'PENDING_DELETE'].includes(seg.approvalStatus) && isOwner && (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] text-green-700 border-green-300 hover:bg-green-50" onClick={() => onApprove?.(seg.id)}>
               Approve
@@ -257,6 +289,7 @@ export default function MapView({
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [mapStyleType, setMapStyleType] = useState<'street' | 'hybrid' | 'satellite'>('street');
   const [showStyleMenu, setShowStyleMenu] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const jMarkers = useRef(new Map<string, maplibregl.Marker>());
   const jRoots = useRef(new Map<string, Root>());
@@ -268,18 +301,35 @@ export default function MapView({
   const segmentPopupRoot = useRef<Root | null>(null);
   const suppressClick = useRef(false);
 
-  const cbEdit = useRef(onEditJoint); cbEdit.current = onEditJoint;
-  const cbDelete = useRef(onDeleteJoint); cbDelete.current = onDeleteJoint;
-  const cbApprove = useRef(onApproveJoint); cbApprove.current = onApproveJoint;
-  const cbReject = useRef(onRejectJoint); cbReject.current = onRejectJoint;
-  const cbDeleteSeg = useRef(onDeleteSegment); cbDeleteSeg.current = onDeleteSegment;
-  const cbApproveSeg = useRef(onApproveSegment); cbApproveSeg.current = onApproveSegment;
-  const cbRejectSeg = useRef(onRejectSegment); cbRejectSeg.current = onRejectSegment;
-  const cbSplice = useRef(onSegmentClick); cbSplice.current = onSegmentClick;
-  const cbClick = useRef(onMapClick); cbClick.current = onMapClick;
-  const cbSpliceMove = useRef(onSpliceMarkerMove); cbSpliceMove.current = onSpliceMarkerMove;
-  const cbPlacementMove = useRef(onPlacementMarkerMove); cbPlacementMove.current = onPlacementMarkerMove;
-  const cbMoveMove = useRef(onMoveMarkerMove); cbMoveMove.current = onMoveMarkerMove;
+  const cbEdit = useRef(onEditJoint);
+  const cbDelete = useRef(onDeleteJoint);
+  const cbApprove = useRef(onApproveJoint);
+  const cbReject = useRef(onRejectJoint);
+  const cbDeleteSeg = useRef(onDeleteSegment);
+  const cbApproveSeg = useRef(onApproveSegment);
+  const cbRejectSeg = useRef(onRejectSegment);
+  const cbSplice = useRef(onSegmentClick);
+  const cbClick = useRef(onMapClick);
+  const cbSpliceMove = useRef(onSpliceMarkerMove);
+  const cbPlacementMove = useRef(onPlacementMarkerMove);
+  const cbMoveMove = useRef(onMoveMarkerMove);
+  const cbPhotoClick = useRef<(url: string) => void>(null);
+
+  useEffect(() => {
+    cbEdit.current = onEditJoint;
+    cbDelete.current = onDeleteJoint;
+    cbApprove.current = onApproveJoint;
+    cbReject.current = onRejectJoint;
+    cbDeleteSeg.current = onDeleteSegment;
+    cbApproveSeg.current = onApproveSegment;
+    cbRejectSeg.current = onRejectSegment;
+    cbSplice.current = onSegmentClick;
+    cbClick.current = onMapClick;
+    cbSpliceMove.current = onSpliceMarkerMove;
+    cbPlacementMove.current = onPlacementMarkerMove;
+    cbMoveMove.current = onMoveMarkerMove;
+    cbPhotoClick.current = (url: string) => setPreviewUrl(url);
+  }, [onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick, onMapClick, onSpliceMarkerMove, onPlacementMarkerMove, onMoveMarkerMove]);
 
   const jointsById = useMemo(() => {
     const m = new Map<string, FiberJoint>();
@@ -545,7 +595,8 @@ export default function MapView({
     for (const j of joints) {
       const { svg, w, h, offset } = getJointSVG(j.jointType);
       const ex = curr.get(j.id);
-      const isPending = j.approvalStatus === 'PENDING';
+      const isPending = j.approvalStatus === 'PENDING' || j.approvalStatus === 'PENDING_EDIT';
+      const isPendingDelete = j.approvalStatus === 'PENDING_DELETE';
       
       const popupContent = (
         <JointPopup 
@@ -554,6 +605,7 @@ export default function MapView({
           onDelete={(id) => cbDelete.current(id)}
           onApprove={(id) => cbApprove.current?.(id)}
           onReject={(id) => cbReject.current?.(id)}
+          onPhotoClick={(url) => cbPhotoClick.current?.(url)}
           userRole={userRole}
         />
       );
@@ -565,13 +617,16 @@ export default function MapView({
         ex.getElement().replaceChildren(...Array.from(newEl.childNodes));
         ex.getElement().style.width = `${w}px`;
         ex.getElement().style.height = `${h}px`;
-        ex.getElement().style.opacity = isPending ? '0.55' : '1';
-        ex.getElement().style.filter = isPending ? 'saturate(0.5)' : '';
+        ex.getElement().style.opacity = isPending ? '0.55' : isPendingDelete ? '0.4' : '1';
+        ex.getElement().style.filter = isPending ? 'saturate(0.5)' : isPendingDelete ? 'grayscale(1) sepia(1) hue-rotate(-50deg) saturate(5)' : '';
       } else {
         const el = mkEl(svg, w, h, suppressClick);
         if (isPending) {
           el.style.opacity = '0.55';
           el.style.filter = 'saturate(0.5)';
+        } else if (isPendingDelete) {
+          el.style.opacity = '0.4';
+          el.style.filter = 'grayscale(1) sepia(1) hue-rotate(-50deg) saturate(5)';
         }
         const container = document.createElement('div');
         const root = createRoot(container);
@@ -612,11 +667,12 @@ export default function MapView({
       const to = jointsById.get(seg.toJointId);
       if (!from || !to) continue;
 
-      const isPending = seg.approvalStatus === 'PENDING';
+      const isPending = seg.approvalStatus === 'PENDING' || seg.approvalStatus === 'PENDING_EDIT';
+      const isPendingDelete = seg.approvalStatus === 'PENDING_DELETE';
       const isHl = highlightedSegmentIds.includes(seg.id) || selectedSegmentId === seg.id;
-      let color = isPending ? '#f59e0b' : '#3b82f6';
-      let weight = isPending ? 2.5 : 3;
-      let opacity = isPending ? 0.5 : 0.85;
+      let color = isPending ? '#f59e0b' : isPendingDelete ? '#ef4444' : '#3b82f6';
+      let weight = (isPending || isPendingDelete) ? 2.5 : 3;
+      let opacity = (isPending || isPendingDelete) ? 0.5 : 0.85;
       if (isHl) { color = '#f59e0b'; weight = 5; opacity = 0.85; }
 
       const coords: [number, number][] = [
@@ -996,6 +1052,27 @@ export default function MapView({
           <Layers className="size-4" />
         </Button>
       </div>
+
+      {/* Full-size photo preview overlay */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <button
+            className="absolute top-4 right-4 size-10 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/40 transition-colors cursor-pointer"
+            onClick={() => setPreviewUrl(null)}
+          >
+            <X className="size-5" />
+          </button>
+          <img
+            src={previewUrl}
+            alt="Full size preview"
+            className="max-w-full max-h-full rounded-lg shadow-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

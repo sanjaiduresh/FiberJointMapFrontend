@@ -17,6 +17,7 @@ interface RawJoint {
   lng: number;
   createdBy: { userId: string; userName: string };
   approvalStatus: ApprovalStatus;
+  photos?: Array<{ url: string; publicId: string; uploadedAt: string }>;
   createdAt: string;
 }
 
@@ -32,6 +33,7 @@ function mapJoint(raw: RawJoint): FiberJoint {
     lng: raw.lng,
     createdBy: raw.createdBy || { userId: '', userName: 'Unknown' },
     approvalStatus: raw.approvalStatus || 'APPROVED',
+    photos: (raw.photos || []).map(p => ({ url: p.url, publicId: p.publicId, uploadedAt: p.uploadedAt })),
     createdAt: raw.createdAt,
   };
 }
@@ -159,6 +161,33 @@ export function useJoints(token: string | null, approvalStatusFilter?: ApprovalS
     };
   }, [token]);
 
+  const uploadJointPhoto = useCallback(async (jointId: string, file: File): Promise<FiberJoint> => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    const res = await fetch(`${API_URL}/${jointId}/photos`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Failed to upload photo');
+    const raw: RawJoint = await res.json();
+    const updated = mapJoint(raw);
+    setJoints((prev) => prev.map((j) => (j.id === jointId ? updated : j)));
+    return updated;
+  }, [token]);
+
+  const deleteJointPhoto = useCallback(async (jointId: string, publicId: string): Promise<FiberJoint> => {
+    const res = await fetch(`${API_URL}/${jointId}/photos/${encodeURIComponent(publicId)}`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to delete photo');
+    const raw: RawJoint = await res.json();
+    const updated = mapJoint(raw);
+    setJoints((prev) => prev.map((j) => (j.id === jointId ? updated : j)));
+    return updated;
+  }, [token]);
+
   // Initial fetch
   useEffect(() => {
     fetchJoints();
@@ -175,5 +204,6 @@ export function useJoints(token: string | null, approvalStatusFilter?: ApprovalS
     createJoint, updateJoint, deleteJoint,
     approveJoint, rejectJoint,
     spliceJoint, refetch: fetchJoints,
+    uploadJointPhoto, deleteJointPhoto,
   };
 }
