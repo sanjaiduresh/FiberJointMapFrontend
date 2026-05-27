@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { FiberJoint, CreateJointPayload, SpliceJointPayload } from '../types';
+import type { FiberJoint, CreateJointPayload, SpliceJointPayload, ApprovalStatus } from '../types';
 import { API_BASE } from '../config';
 import type { RawSegment } from './useSegments';
 
@@ -16,6 +16,7 @@ interface RawJoint {
   lat: number;
   lng: number;
   createdBy: { userId: string; userName: string };
+  approvalStatus: ApprovalStatus;
   createdAt: string;
 }
 
@@ -30,11 +31,12 @@ function mapJoint(raw: RawJoint): FiberJoint {
     lat: raw.lat,
     lng: raw.lng,
     createdBy: raw.createdBy || { userId: '', userName: 'Unknown' },
+    approvalStatus: raw.approvalStatus || 'APPROVED',
     createdAt: raw.createdAt,
   };
 }
 
-export function useJoints(token: string | null) {
+export function useJoints(token: string | null, approvalStatusFilter?: ApprovalStatus) {
   const [joints, setJoints] = useState<FiberJoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,10 @@ export function useJoints(token: string | null) {
     if (!token) return;
     try {
       if (!silent) setLoading(true);
-      const res = await fetch(API_URL, {
+      const url = approvalStatusFilter
+        ? `${API_URL}?approvalStatus=${approvalStatusFilter}`
+        : API_URL;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Failed to fetch joints');
@@ -55,7 +60,7 @@ export function useJoints(token: string | null) {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [token]);
+  }, [token, approvalStatusFilter]);
 
   const createJoint = useCallback(async (payload: CreateJointPayload) => {
     const res = await fetch(API_URL, {
@@ -78,7 +83,10 @@ export function useJoints(token: string | null) {
       method: 'DELETE',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    if (!res.ok) throw new Error('Failed to delete joint');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to delete joint');
+    }
     setJoints((prev) => prev.filter((j) => j.id !== id));
   }, [token]);
 
@@ -96,6 +104,28 @@ export function useJoints(token: string | null) {
     const updatedJoint = mapJoint(raw);
     setJoints((prev) => prev.map((j) => (j.id === id ? updatedJoint : j)));
     return updatedJoint;
+  }, [token]);
+
+  const approveJoint = useCallback(async (id: string) => {
+    const res = await fetch(`${API_URL}/${id}/approve`, {
+      method: 'PUT',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to approve joint');
+    const raw: RawJoint = await res.json();
+    const approved = mapJoint(raw);
+    setJoints((prev) => prev.map((j) => (j.id === id ? approved : j)));
+    return approved;
+  }, [token]);
+
+  const rejectJoint = useCallback(async (id: string) => {
+    const res = await fetch(`${API_URL}/${id}/reject`, {
+      method: 'PUT',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to reject joint');
+    // Remove from local state after rejection
+    setJoints((prev) => prev.filter((j) => j.id !== id));
   }, [token]);
 
   // Splice a joint onto an existing segment — splits it into two
@@ -140,5 +170,10 @@ export function useJoints(token: string | null) {
     return () => clearInterval(interval);
   }, [fetchJoints]);
 
-  return { joints, loading, error, createJoint, updateJoint, deleteJoint, spliceJoint, refetch: fetchJoints };
+  return {
+    joints, loading, error,
+    createJoint, updateJoint, deleteJoint,
+    approveJoint, rejectJoint,
+    spliceJoint, refetch: fetchJoints,
+  };
 }

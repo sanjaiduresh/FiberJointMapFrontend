@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import SpliceJointModal from './components/SpliceJointModal';
 import EditJointModal from './components/EditJointModal';
+import TeamManagement from './components/TeamManagement';
+import AdminDashboard from './components/AdminDashboard';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -63,15 +65,46 @@ function bfsPath(fromId: string, toId: string, segments: Segment[]): string[] | 
 // ─── component ───────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { user, token, loading: authLoading, logout, isAuthenticated } = useAuth();
+  const { user, token, loading: authLoading, logout, isAuthenticated, isAdmin, role } = useAuth();
+
+  // ── map mode ──
+  type MapMode = 'live' | 'draft';
+  const [mapMode, setMapMode] = useState<MapMode>('live');
+  const isDraftMap = mapMode === 'draft';
+
+  // Live map: only APPROVED items
   const {
-    joints, loading: jointsLoading, error: jointsError,
+    joints: approvedJoints, loading: ajLoading, error: ajError,
     createJoint, deleteJoint, spliceJoint, updateJoint,
-  } = useJoints(token);
+    approveJoint, rejectJoint,
+    refetch: refetchApprovedJoints,
+  } = useJoints(token, 'APPROVED');
+
+  // Draft map: ALL items (no filter)
   const {
-    segments, loading: segmentsLoading, error: segmentsError,
+    joints: allJoints, loading: draftJointsLoading, error: draftJointsError,
+    refetch: refetchDraftJoints,
+  } = useJoints(token);
+
+  const {
+    segments: approvedSegments, loading: asLoading, error: asError,
     createSegment, deleteSegment, applySplice,
+    approveSegment, rejectSegment,
+    refetch: refetchApprovedSegments,
+  } = useSegments(token, 'APPROVED');
+
+  const {
+    segments: allSegments, loading: draftSegLoading, error: draftSegError,
+    refetch: refetchDraftSegments,
   } = useSegments(token);
+
+  // Active data based on map mode
+  const joints = isDraftMap ? allJoints : approvedJoints;
+  const segments = isDraftMap ? allSegments : approvedSegments;
+  const jointsLoading = isDraftMap ? draftJointsLoading : ajLoading;
+  const segmentsLoading = isDraftMap ? draftSegLoading : asLoading;
+  const jointsError = isDraftMap ? draftJointsError : ajError;
+  const segmentsError = isDraftMap ? draftSegError : asError;
 
   const isMobile = useIsMobile();
 
@@ -101,6 +134,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [teamManagementOpen, setTeamManagementOpen] = useState(false);
   const mapRef = useRef<MapLibreMap | null>(null);
 
   // ── placement mode state ──
@@ -260,8 +294,53 @@ export default function App() {
     try {
       await deleteSegment(id);
       showToast('Segment deleted');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to delete segment', 'error');
+    }
+  };
+
+  // ── approval handlers ──
+  const handleApproveJoint = async (id: string) => {
+    try {
+      await approveJoint(id);
+      refetchDraftJoints(true);
+      refetchApprovedJoints(true);
+      showToast('Joint approved!');
     } catch {
-      showToast('Failed to delete segment', 'error');
+      showToast('Failed to approve joint', 'error');
+    }
+  };
+
+  const handleRejectJoint = async (id: string) => {
+    if (!confirm('Reject this joint? It will be removed.')) return;
+    try {
+      await rejectJoint(id);
+      refetchDraftJoints(true);
+      showToast('Joint rejected');
+    } catch {
+      showToast('Failed to reject joint', 'error');
+    }
+  };
+
+  const handleApproveSegment = async (id: string) => {
+    try {
+      await approveSegment(id);
+      refetchDraftSegments(true);
+      refetchApprovedSegments(true);
+      showToast('Segment approved!');
+    } catch {
+      showToast('Failed to approve segment', 'error');
+    }
+  };
+
+  const handleRejectSegment = async (id: string) => {
+    if (!confirm('Reject this segment?')) return;
+    try {
+      await rejectSegment(id);
+      refetchDraftSegments(true);
+      showToast('Segment rejected');
+    } catch {
+      showToast('Failed to reject segment', 'error');
     }
   };
 
@@ -333,6 +412,7 @@ export default function App() {
   }
 
   if (!isAuthenticated) return <LoginPage />;
+  if (isAdmin) return <AdminDashboard />;
 
   const anyLoading = jointsLoading || segmentsLoading;
   const anyError = jointsError || segmentsError;
@@ -409,6 +489,11 @@ export default function App() {
           onToggleTraceMode={handleToggleTrace}
           traceFrom={traceFrom}
           onOpenSettings={() => setSettingsOpen(true)}
+          userRole={role}
+          onApproveJoint={handleApproveJoint}
+          onRejectJoint={handleRejectJoint}
+          isDraftMap={isDraftMap}
+          onOpenTeamManagement={() => setTeamManagementOpen(true)}
         />
       </div>
     </div>
@@ -505,6 +590,38 @@ export default function App() {
             </Button>
           )}
         </div>
+
+        {/* ── Map Mode Toggle ── */}
+        {!waypointMode && !spliceMode && !placementMode && !moveModeJointId && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
+            <div className="flex bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+              <button
+                onClick={() => setMapMode('live')}
+                className={cn(
+                  'px-4 py-2 text-xs font-semibold transition-all flex items-center gap-1.5',
+                  !isDraftMap
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                )}
+              >
+                <div className={cn('size-2 rounded-full', !isDraftMap ? 'bg-green-400 animate-pulse' : 'bg-muted-foreground/40')} />
+                Live Map
+              </button>
+              <button
+                onClick={() => setMapMode('draft')}
+                className={cn(
+                  'px-4 py-2 text-xs font-semibold transition-all flex items-center gap-1.5 border-l border-border',
+                  isDraftMap
+                    ? 'bg-amber-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                )}
+              >
+                <div className={cn('size-2 rounded-full', isDraftMap ? 'bg-white animate-pulse' : 'bg-muted-foreground/40')} />
+                Draft Map
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Waypoint mode banner ── */}
         {waypointMode && (
@@ -724,8 +841,8 @@ export default function App() {
           </div>
         )}
 
-        {/* ── FAB ── */}
-        {!waypointMode && !spliceMode && !placementMode && !moveModeJointId && (
+        {/* ── FAB — only on Draft Map ── */}
+        {isDraftMap && !waypointMode && !spliceMode && !placementMode && !moveModeJointId && (
           <div className="absolute bottom-6 right-4 md:right-6 z-10">
             {showAddMenu && (
               <div className="absolute bottom-16 right-0 bg-card border border-border rounded-xl shadow-lg overflow-hidden mb-2 w-52 ring-1 ring-foreground/5">
@@ -786,7 +903,11 @@ export default function App() {
           onMapClick={handleMapClick}
           onEditJoint={setEditingJointId}
           onDeleteJoint={handleDeleteJoint}
+          onApproveJoint={handleApproveJoint}
+          onRejectJoint={handleRejectJoint}
           onDeleteSegment={handleDeleteSegment}
+          onApproveSegment={handleApproveSegment}
+          onRejectSegment={handleRejectSegment}
           onSegmentClick={handleSegmentClick}
           highlightedSegmentIds={highlightedSegmentIds}
           mapRef={mapRef}
@@ -805,6 +926,7 @@ export default function App() {
           movePos={movePos}
           onMoveMarkerMove={(lat, lng) => setMovePos({ lat, lng })}
           liveLocation={liveLocation}
+          userRole={role}
         />
       </div>
 
@@ -884,6 +1006,12 @@ export default function App() {
           onClose={resetSpliceState}
         />
       )}
+
+      {/* ── Team Management ── */}
+      <TeamManagement
+        open={teamManagementOpen}
+        onClose={() => setTeamManagementOpen(false)}
+      />
 
       {/* ── Settings Sheet ──────────────────────────────────────────────────── */}
 
@@ -993,6 +1121,19 @@ export default function App() {
                 </div>
               </section>
             )}
+
+            {/* Role info */}
+            <section>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                Your Role
+              </p>
+              <div className="bg-muted rounded-xl px-3 py-2.5 border border-border">
+                <p className="text-sm font-medium text-foreground">{role === 'OWNER' ? '👑 Owner' : '👷 Employee'}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {user?.organizationName || 'Organization'}
+                </p>
+              </div>
+            </section>
 
             {/* Joint type legend */}
             <section>

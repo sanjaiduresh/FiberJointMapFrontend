@@ -1,3 +1,9 @@
+// === Approval Status ===
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+// === Role Types ===
+export type UserRole = 'ADMIN' | 'OWNER' | 'EMPLOYEE';
+
 // === Joint Types ===
 export type JointType = 'Base' | 'Main' | 'Sub' | 'Splice';
 
@@ -11,6 +17,7 @@ export interface FiberJoint {
   lat: number;
   lng: number;
   createdBy: { userId: string; userName: string };
+  approvalStatus: ApprovalStatus;
   createdAt: string;
 }
 
@@ -34,6 +41,7 @@ export interface Segment {
   fiberCount: number;
   lengthMeters: number;
   createdBy: { userId: string; userName: string };
+  approvalStatus: ApprovalStatus;
   createdAt: string;
 }
 
@@ -62,4 +70,16 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  organizationId: string;
+  role: UserRole;
+  organizationName: string;
+}
+
+// === Team Member Types ===
+export interface TeamMember {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  createdAt: string;
 }

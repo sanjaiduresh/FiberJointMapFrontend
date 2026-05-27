@@ -480,4 +480,20 @@ select {
   html {
     @apply font-sans;
   }
+
+  /* Force pointer cursor on interactive elements */
+  button,
+  select,
+  a,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="combobox"],
+  [role="menuitem"],
+  [role="option"],
+  [role="checkbox"],
+  [role="radio"],
+  .cursor-pointer {
+    cursor: pointer;
+  }
 }

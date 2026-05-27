@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
-import type { FiberJoint, Segment } from '../types';
+import type { FiberJoint, Segment, UserRole } from '../types';
 import type { JointType } from '../types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Trash2, ChevronDown, ChevronUp, Settings, Route, MapPin, Building2, CircleDot, Circle, Scissors, Edit3, Navigation } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronUp, Settings, Route, MapPin, Building2, CircleDot, Circle, Scissors, Edit3, Navigation, CheckCircle2, XCircle, Clock, Users } from 'lucide-react';
 
 type FilterType = 'all' | 'main' | 'sub' | 'splice';
 
@@ -19,6 +19,11 @@ interface SidebarProps {
   onToggleTraceMode: () => void;
   traceFrom: string | null;
   onOpenSettings: () => void;
+  userRole: UserRole | null;
+  onApproveJoint?: (id: string) => void;
+  onRejectJoint?: (id: string) => void;
+  isDraftMap?: boolean;
+  onOpenTeamManagement?: () => void;
 }
 
 const TYPE_CONFIG: Record<JointType, { icon: React.ElementType; label: string; dot: string; badge: string }> = {
@@ -31,10 +36,13 @@ const TYPE_CONFIG: Record<JointType, { icon: React.ElementType; label: string; d
 export default function Sidebar({
   joints, segments, onFlyTo, onEditJoint, onDeleteJoint,
   onTraceRoute, traceMode, onToggleTraceMode, traceFrom,
-  onOpenSettings,
+  onOpenSettings, userRole, onApproveJoint, onRejectJoint,
+  isDraftMap, onOpenTeamManagement,
 }: SidebarProps) {
   const [filter, setFilter] = useState<FilterType>('all');
   const [expandedJoint, setExpandedJoint] = useState<string | null>(null);
+
+  const isOwner = userRole === 'OWNER';
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-US', {
@@ -134,7 +142,7 @@ export default function Sidebar({
                 : `No ${filter} joints yet`}
             </p>
             <p className="text-xs text-muted-foreground/70 mt-1">
-              Click on the map to add a joint
+              {isDraftMap ? 'Switch to Draft Map to add joints' : 'Click on the map to add a joint'}
             </p>
           </div>
         ) : (
@@ -143,6 +151,7 @@ export default function Sidebar({
               const isExpanded = expandedJoint === joint.id;
               const neighbors = getNeighbors(joint.id);
               const typeCfg = TYPE_CONFIG[joint.jointType ?? 'Main'];
+              const isPending = joint.approvalStatus === 'PENDING';
 
               return (
                 <div key={joint.id}>
@@ -151,7 +160,9 @@ export default function Sidebar({
                       'group bg-card hover:bg-muted/50 border rounded-xl p-3 transition-all cursor-pointer',
                       traceMode
                         ? 'border-amber-200 hover:border-amber-300'
-                        : 'border-border hover:border-primary/30',
+                        : isPending
+                          ? 'border-amber-300 bg-amber-50/30'
+                          : 'border-border hover:border-primary/30',
                     )}
                     onClick={() => {
                       if (traceMode) {
@@ -168,7 +179,7 @@ export default function Sidebar({
 
                         {/* Title row */}
                         <div className="flex items-center gap-2 mb-1">
-                          <div className={cn('size-2 rounded-full shrink-0', typeCfg.dot)} />
+                          <div className={cn('size-2 rounded-full shrink-0', isPending ? 'bg-amber-500 animate-pulse' : typeCfg.dot)} />
                           <h3 className="text-sm font-semibold text-foreground truncate">
                             {joint.label}
                           </h3>
@@ -179,6 +190,12 @@ export default function Sidebar({
                           )}>
                             <typeCfg.icon className="size-3 mr-1 shrink-0" /> {typeCfg.label}
                           </span>
+                          {/* Pending badge */}
+                          {isPending && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0 rounded text-[9px] font-medium border shrink-0 bg-amber-100 text-amber-700 border-amber-200">
+                              <Clock className="size-2.5" /> Pending
+                            </span>
+                          )}
                         </div>
 
                         {/* Notes */}
@@ -203,6 +220,28 @@ export default function Sidebar({
                             {formatDate(joint.createdAt)}
                           </span>
                         </div>
+
+                        {/* Approve / Reject for owner on draft map */}
+                        {isPending && isOwner && isDraftMap && (
+                          <div className="flex items-center gap-2 mt-2 ml-4">
+                            <Button
+                              variant="outline"
+                              size="xs"
+                              className="text-[10px] h-6 gap-1 text-green-700 border-green-300 hover:bg-green-50"
+                              onClick={(e) => { e.stopPropagation(); onApproveJoint?.(joint.id); }}
+                            >
+                              <CheckCircle2 className="size-3" /> Approve
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="xs"
+                              className="text-[10px] h-6 gap-1 text-red-700 border-red-300 hover:bg-red-50"
+                              onClick={(e) => { e.stopPropagation(); onRejectJoint?.(joint.id); }}
+                            >
+                              <XCircle className="size-3" /> Reject
+                            </Button>
+                          </div>
+                        )}
 
                       </div>
 
@@ -229,7 +268,8 @@ export default function Sidebar({
                             <Edit3 className="size-3.5" />
                           </Button>
                         )}
-                        {!traceMode && (
+                        {/* Only show delete for OWNER */}
+                        {!traceMode && isOwner && (
                           <Button
                             variant="ghost"
                             size="icon-xs"
@@ -292,8 +332,19 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Footer — Settings */}
-      <div className="px-4 py-3 border-t border-border bg-muted/40">
+      {/* Footer — Settings + Team */}
+      <div className="px-4 py-3 border-t border-border bg-muted/40 space-y-2">
+        {isOwner && onOpenTeamManagement && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-2 text-muted-foreground hover:text-foreground"
+            onClick={onOpenTeamManagement}
+          >
+            <Users className="size-3.5" />
+            Team Management
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"

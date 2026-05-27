@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { AuthUser } from '../types';
+import type { AuthUser, UserRole } from '../types';
 import { API_BASE } from '../config';
 
 const TOKEN_KEY = 'fiber_token';
@@ -14,6 +14,9 @@ interface AuthContextValue {
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  isAdmin: boolean;
+  isOwner: boolean;
+  role: UserRole | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -98,6 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         isAuthenticated: !!user && !!token,
+        isAdmin: user?.role === 'ADMIN',
+        isOwner: user?.role === 'OWNER',
+        role: user?.role ?? null,
       }}
     >
       {children}

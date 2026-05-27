@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Segment, CreateSegmentPayload } from '../types';
+import type { Segment, CreateSegmentPayload, ApprovalStatus } from '../types';
 import { API_BASE } from '../config';
 
 const API_URL = `${API_BASE}/api/segments`;
@@ -13,6 +13,7 @@ export interface RawSegment {
   fiberCount: number;
   lengthMeters: number;
   createdBy: { userId: string; userName: string };
+  approvalStatus: ApprovalStatus;
   createdAt: string;
 }
 
@@ -26,11 +27,12 @@ function mapSegment(raw: RawSegment): Segment {
     fiberCount: raw.fiberCount,
     lengthMeters: raw.lengthMeters,
     createdBy: raw.createdBy,
+    approvalStatus: raw.approvalStatus || 'APPROVED',
     createdAt: raw.createdAt,
   };
 }
 
-export function useSegments(token: string | null) {
+export function useSegments(token: string | null, approvalStatusFilter?: ApprovalStatus) {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +41,10 @@ export function useSegments(token: string | null) {
     if (!token) return;
     try {
       if (!silent) setLoading(true);
-      const res = await fetch(API_URL, {
+      const url = approvalStatusFilter
+        ? `${API_URL}?approvalStatus=${approvalStatusFilter}`
+        : API_URL;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Failed to fetch segments');
@@ -51,7 +56,7 @@ export function useSegments(token: string | null) {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [token]);
+  }, [token, approvalStatusFilter]);
 
   const createSegment = useCallback(async (payload: CreateSegmentPayload) => {
     const res = await fetch(API_URL, {
@@ -74,7 +79,31 @@ export function useSegments(token: string | null) {
       method: 'DELETE',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    if (!res.ok) throw new Error('Failed to delete segment');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to delete segment');
+    }
+    setSegments((prev) => prev.filter((s) => s.id !== id));
+  }, [token]);
+
+  const approveSegment = useCallback(async (id: string) => {
+    const res = await fetch(`${API_URL}/${id}/approve`, {
+      method: 'PUT',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to approve segment');
+    const raw: RawSegment = await res.json();
+    const approved = mapSegment(raw);
+    setSegments((prev) => prev.map((s) => (s.id === id ? approved : s)));
+    return approved;
+  }, [token]);
+
+  const rejectSegment = useCallback(async (id: string) => {
+    const res = await fetch(`${API_URL}/${id}/reject`, {
+      method: 'PUT',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to reject segment');
     setSegments((prev) => prev.filter((s) => s.id !== id));
   }, [token]);
 
@@ -105,7 +134,9 @@ export function useSegments(token: string | null) {
 
   return {
     segments, loading, error,
-    createSegment, deleteSegment, applySplice,
+    createSegment, deleteSegment,
+    approveSegment, rejectSegment,
+    applySplice,
     refetch: fetchSegments,
   };
 }

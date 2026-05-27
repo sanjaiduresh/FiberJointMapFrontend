@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import maplibregl, { Map as MapLibreMap } from 'maplibre-gl';
-import type { FiberJoint, Segment } from '../types';
+import type { FiberJoint, Segment, UserRole } from '../types';
 import type { JointType } from '../types';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
@@ -90,7 +90,7 @@ function getJointSVG(type?: JointType) {
 
 // ---------- popup components ----------
 
-function JointPopup({ j, onEdit, onDelete }: { j: FiberJoint, onEdit: (id: string) => void, onDelete: (id: string) => void }) {
+function JointPopup({ j, onEdit, onDelete, onApprove, onReject, userRole }: { j: FiberJoint, onEdit: (id: string) => void, onDelete: (id: string) => void, onApprove?: (id: string) => void, onReject?: (id: string) => void, userRole?: UserRole | null }) {
   const typeColors: Record<JointType, string> = {
     Base: 'bg-orange-100 text-orange-800 border-orange-200',
     Main: 'bg-cyan-100 text-cyan-800 border-cyan-200',
@@ -98,10 +98,17 @@ function JointPopup({ j, onEdit, onDelete }: { j: FiberJoint, onEdit: (id: strin
     Splice: 'bg-purple-100 text-purple-800 border-purple-200',
   };
   const typeColor = typeColors[j.jointType ?? 'Main'] ?? typeColors.Main;
+  const isOwner = userRole === 'OWNER';
+  const isPending = j.approvalStatus === 'PENDING';
 
   return (
     <div className="p-3 min-w-[220px] flex flex-col gap-2">
-      <h3 className="font-semibold text-[15px] leading-tight pr-4 text-foreground">{j.label}</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="font-semibold text-[15px] leading-tight pr-4 text-foreground">{j.label}</h3>
+        {isPending && (
+          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Pending</Badge>
+        )}
+      </div>
       <div className="flex flex-wrap gap-1.5 mb-1">
         <Badge variant="outline" className={typeColor}>{j.jointType ?? 'Main'}</Badge>
         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{j.cableType}</Badge>
@@ -118,10 +125,22 @@ function JointPopup({ j, onEdit, onDelete }: { j: FiberJoint, onEdit: (id: strin
           <Button variant="default" size="sm" className="flex-1 h-7 text-xs bg-blue-600 hover:bg-blue-700" onClick={() => onEdit(j.id)}>
             <Edit3 className="size-3.5 mr-1" /> Edit
           </Button>
-          <Button variant="destructive" size="sm" className="flex-1 h-7 text-xs" onClick={() => onDelete(j.id)}>
-            <Trash2 className="size-3.5 mr-1" /> Delete
-          </Button>
+          {isOwner && (
+            <Button variant="destructive" size="sm" className="flex-1 h-7 text-xs" onClick={() => onDelete(j.id)}>
+              <Trash2 className="size-3.5 mr-1" /> Delete
+            </Button>
+          )}
         </div>
+        {isPending && isOwner && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] text-green-700 border-green-300 hover:bg-green-50" onClick={() => onApprove?.(j.id)}>
+              Approve
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] text-red-700 border-red-300 hover:bg-red-50" onClick={() => onReject?.(j.id)}>
+              Reject
+            </Button>
+          </div>
+        )}
         <Button variant="outline" size="sm" className="w-full h-7 text-xs" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${j.lat},${j.lng}`, '_blank')}>
           <Navigation className="size-3.5 mr-1" /> Get Direction
         </Button>
@@ -130,14 +149,21 @@ function JointPopup({ j, onEdit, onDelete }: { j: FiberJoint, onEdit: (id: strin
   );
 }
 
-function SegmentPopup({ seg, fromLabel, toLabel, onSplice, onDelete }: { seg: Segment, fromLabel: string, toLabel: string, onSplice: (id: string) => void, onDelete: (id: string) => void }) {
+function SegmentPopup({ seg, fromLabel, toLabel, onSplice, onDelete, onApprove, onReject, userRole }: { seg: Segment, fromLabel: string, toLabel: string, onSplice: (id: string) => void, onDelete: (id: string) => void, onApprove?: (id: string) => void, onReject?: (id: string) => void, userRole?: UserRole | null }) {
   const dist = seg.lengthMeters >= 1000
     ? `${(seg.lengthMeters / 1000).toFixed(2)} km`
     : `${seg.lengthMeters.toFixed(0)} m`;
+  const isOwner = userRole === 'OWNER';
+  const isPending = seg.approvalStatus === 'PENDING';
 
   return (
     <div className="p-3 min-w-[220px] flex flex-col gap-2">
-      <h3 className="font-semibold text-[15px] leading-tight pr-4 text-foreground">Cable Segment</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="font-semibold text-[15px] leading-tight pr-4 text-foreground">Cable Segment</h3>
+        {isPending && (
+          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Pending</Badge>
+        )}
+      </div>
       <div className="flex flex-wrap gap-1.5 mb-1">
         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{seg.cableType}</Badge>
         <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{seg.fiberCount} fibers</Badge>
@@ -152,9 +178,21 @@ function SegmentPopup({ seg, fromLabel, toLabel, onSplice, onDelete }: { seg: Se
         <Button variant="secondary" size="sm" className="w-full h-7 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200" onClick={() => onSplice(seg.id)}>
           <Scissors className="size-3.5 mr-1.5" /> Add Splice Here
         </Button>
-        <Button variant="destructive" size="sm" className="w-full h-7 text-xs" onClick={() => onDelete(seg.id)}>
-          <Trash2 className="size-3.5 mr-1.5" /> Delete Segment
-        </Button>
+        {isOwner && (
+          <Button variant="destructive" size="sm" className="w-full h-7 text-xs" onClick={() => onDelete(seg.id)}>
+            <Trash2 className="size-3.5 mr-1.5" /> Delete Segment
+          </Button>
+        )}
+        {isPending && isOwner && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] text-green-700 border-green-300 hover:bg-green-50" onClick={() => onApprove?.(seg.id)}>
+              Approve
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px] text-red-700 border-red-300 hover:bg-red-50" onClick={() => onReject?.(seg.id)}>
+              Reject
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -170,7 +208,11 @@ interface MapViewProps {
   onMapClick: (lat: number, lng: number) => void;
   onEditJoint?: (id: string) => void;
   onDeleteJoint: (id: string) => void;
+  onApproveJoint?: (id: string) => void;
+  onRejectJoint?: (id: string) => void;
   onDeleteSegment?: (id: string) => void;
+  onApproveSegment?: (id: string) => void;
+  onRejectSegment?: (id: string) => void;
   onSegmentClick?: (segmentId: string, lat: number, lng: number) => void;
   highlightedSegmentIds: string[];
   mapRef: React.MutableRefObject<maplibregl.Map | null>;
@@ -193,18 +235,21 @@ interface MapViewProps {
   onMoveMarkerMove?: (lat: number, lng: number) => void;
   // ── live location (owned by App.tsx) ──
   liveLocation?: { lat: number; lng: number; accuracy?: number } | null;
+  // ── RBAC ──
+  userRole?: UserRole | null;
 }
 
 // ---------- component ----------
 
 export default function MapView({
-  joints, segments, onMapClick, onEditJoint, onDeleteJoint, onDeleteSegment, onSegmentClick,
+  joints, segments, onMapClick, onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick,
   highlightedSegmentIds, mapRef, onMapReady,
   waypointMode, pendingWaypoints, pendingFromJoint, pendingToJoint,
   spliceMode, spliceMarkerPos, onSpliceMarkerMove,
   placementMode, placementPos, onPlacementMarkerMove,
   moveMode, movePos, onMoveMarkerMove,
   liveLocation,
+  userRole,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapObjRef = useRef<maplibregl.Map | null>(null);
@@ -223,7 +268,11 @@ export default function MapView({
 
   const cbEdit = useRef(onEditJoint); cbEdit.current = onEditJoint;
   const cbDelete = useRef(onDeleteJoint); cbDelete.current = onDeleteJoint;
+  const cbApprove = useRef(onApproveJoint); cbApprove.current = onApproveJoint;
+  const cbReject = useRef(onRejectJoint); cbReject.current = onRejectJoint;
   const cbDeleteSeg = useRef(onDeleteSegment); cbDeleteSeg.current = onDeleteSegment;
+  const cbApproveSeg = useRef(onApproveSegment); cbApproveSeg.current = onApproveSegment;
+  const cbRejectSeg = useRef(onRejectSegment); cbRejectSeg.current = onRejectSegment;
   const cbSplice = useRef(onSegmentClick); cbSplice.current = onSegmentClick;
   const cbClick = useRef(onMapClick); cbClick.current = onMapClick;
   const cbSpliceMove = useRef(onSpliceMarkerMove); cbSpliceMove.current = onSpliceMarkerMove;
@@ -270,7 +319,7 @@ export default function MapView({
         paint: {
           'line-color': ['get', 'color'],
           'line-width': ['get', 'weight'],
-          'line-opacity': 0.85,
+          'line-opacity': ['coalesce', ['get', 'opacity'], 0.85],
         },
       });
       // Wide invisible hit area for clicks
@@ -375,6 +424,7 @@ export default function MapView({
             seg={seg}
             fromLabel={fromLabel}
             toLabel={toLabel}
+            userRole={userRole}
             onSplice={(id) => {
               segmentPopup.current?.remove();
               suppressClick.current = true;
@@ -384,6 +434,14 @@ export default function MapView({
             onDelete={(id) => {
               segmentPopup.current?.remove();
               cbDeleteSeg.current?.(id);
+            }}
+            onApprove={(id) => {
+              segmentPopup.current?.remove();
+              cbApproveSeg.current?.(id);
+            }}
+            onReject={(id) => {
+              segmentPopup.current?.remove();
+              cbRejectSeg.current?.(id);
             }}
           />
         );
@@ -459,12 +517,16 @@ export default function MapView({
     for (const j of joints) {
       const { svg, w, h, offset } = getJointSVG(j.jointType);
       const ex = curr.get(j.id);
+      const isPending = j.approvalStatus === 'PENDING';
       
       const popupContent = (
         <JointPopup 
           j={j} 
           onEdit={(id) => cbEdit.current?.(id)} 
-          onDelete={(id) => cbDelete.current(id)} 
+          onDelete={(id) => cbDelete.current(id)}
+          onApprove={(id) => cbApprove.current?.(id)}
+          onReject={(id) => cbReject.current?.(id)}
+          userRole={userRole}
         />
       );
 
@@ -475,8 +537,14 @@ export default function MapView({
         ex.getElement().replaceChildren(...Array.from(newEl.childNodes));
         ex.getElement().style.width = `${w}px`;
         ex.getElement().style.height = `${h}px`;
+        ex.getElement().style.opacity = isPending ? '0.55' : '1';
+        ex.getElement().style.filter = isPending ? 'saturate(0.5)' : '';
       } else {
         const el = mkEl(svg, w, h, suppressClick);
+        if (isPending) {
+          el.style.opacity = '0.55';
+          el.style.filter = 'saturate(0.5)';
+        }
         const container = document.createElement('div');
         const root = createRoot(container);
         root.render(popupContent);
@@ -516,10 +584,12 @@ export default function MapView({
       const to = jointsById.get(seg.toJointId);
       if (!from || !to) continue;
 
+      const isPending = seg.approvalStatus === 'PENDING';
       const isHl = highlightedSegmentIds.includes(seg.id) || selectedSegmentId === seg.id;
-      let color = '#3b82f6';
-      let weight = 3;
-      if (isHl) { color = '#f59e0b'; weight = 5; }
+      let color = isPending ? '#f59e0b' : '#3b82f6';
+      let weight = isPending ? 2.5 : 3;
+      let opacity = isPending ? 0.5 : 0.85;
+      if (isHl) { color = '#f59e0b'; weight = 5; opacity = 0.85; }
 
       const coords: [number, number][] = [
         [from.lng, from.lat],
@@ -529,7 +599,7 @@ export default function MapView({
 
       features.push({
         type: 'Feature',
-        properties: { color, weight, segmentId: seg.id, fromLabel: from.label, toLabel: to.label },
+        properties: { color, weight, opacity, segmentId: seg.id, fromLabel: from.label, toLabel: to.label },
         geometry: { type: 'LineString', coordinates: coords },
       });
 
@@ -796,7 +866,7 @@ export default function MapView({
             box-shadow:0 0 8px rgba(59,130,246,0.6)
           "></div>
         </div>`;
-      Object.assign(el.style, { width: '20px', height: '20px' });
+      Object.assign(el.style, { width: '20px', height: '20px', cursor: 'pointer' });
 
       const popup = new maplibregl.Popup({
         offset: [0, -10],
