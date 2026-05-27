@@ -13,6 +13,7 @@ export interface RawSegment {
   fiberCount: number;
   lengthMeters: number;
   createdBy: { userId: string; userName: string };
+  organizationId: string;
   approvalStatus: ApprovalStatus;
   createdAt: string;
 }
@@ -27,12 +28,13 @@ function mapSegment(raw: RawSegment): Segment {
     fiberCount: raw.fiberCount,
     lengthMeters: raw.lengthMeters,
     createdBy: raw.createdBy,
+    organizationId: raw.organizationId || '',
     approvalStatus: raw.approvalStatus || 'APPROVED',
     createdAt: raw.createdAt,
   };
 }
 
-export function useSegments(token: string | null, approvalStatusFilter?: ApprovalStatus) {
+export function useSegments(token: string | null, approvalStatusFilter?: string) {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

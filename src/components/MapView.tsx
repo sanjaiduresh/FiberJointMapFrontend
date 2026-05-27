@@ -99,7 +99,6 @@ function JointPopup({ j, onEdit, onDelete, onApprove, onReject, onPhotoClick, us
   };
   const typeColor = typeColors[j.jointType ?? 'Main'] ?? typeColors.Main;
   const isOwner = userRole === 'OWNER';
-  const isPending = j.approvalStatus === 'PENDING';
   const photos = j.photos || [];
 
   return (
@@ -180,7 +179,6 @@ function SegmentPopup({ seg, fromLabel, toLabel, onSplice, onDelete, onApprove, 
     ? `${(seg.lengthMeters / 1000).toFixed(2)} km`
     : `${seg.lengthMeters.toFixed(0)} m`;
   const isOwner = userRole === 'OWNER';
-  const isPending = seg.approvalStatus === 'PENDING';
 
   return (
     <div className="p-3 min-w-[220px] flex flex-col gap-2">

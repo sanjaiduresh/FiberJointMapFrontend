@@ -16,6 +16,7 @@ interface RawJoint {
   lat: number;
   lng: number;
   createdBy: { userId: string; userName: string };
+  organizationId: string;
   approvalStatus: ApprovalStatus;
   photos?: Array<{ url: string; publicId: string; uploadedAt: string }>;
   createdAt: string;
@@ -31,6 +32,7 @@ function mapJoint(raw: RawJoint): FiberJoint {
     fiberCount: raw.fiberCount ?? 12,
     lat: raw.lat,
     lng: raw.lng,
+    organizationId: raw.organizationId || '',
     createdBy: raw.createdBy || { userId: '', userName: 'Unknown' },
     approvalStatus: raw.approvalStatus || 'APPROVED',
     photos: (raw.photos || []).map(p => ({ url: p.url, publicId: p.publicId, uploadedAt: p.uploadedAt })),
@@ -38,7 +40,7 @@ function mapJoint(raw: RawJoint): FiberJoint {
   };
 }
 
-export function useJoints(token: string | null, approvalStatusFilter?: ApprovalStatus) {
+export function useJoints(token: string | null, approvalStatusFilter?: string) {
   const [joints, setJoints] = useState<FiberJoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
