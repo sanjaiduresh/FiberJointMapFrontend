@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit3, Trash2, Scissors, Navigation } from 'lucide-react';
+import { Edit3, Trash2, Scissors, Navigation, Layers } from 'lucide-react';
 
 export const BASE_LAT = 8.336639;
 export const BASE_LNG = 77.869861;
@@ -255,6 +255,8 @@ export default function MapView({
   const mapObjRef = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [mapStyleType, setMapStyleType] = useState<'street' | 'hybrid' | 'satellite'>('street');
+  const [showStyleMenu, setShowStyleMenu] = useState(false);
 
   const jMarkers = useRef(new Map<string, maplibregl.Marker>());
   const jRoots = useRef(new Map<string, Root>());
@@ -390,6 +392,32 @@ export default function MapView({
         source: 'live-acc',
         paint: { 'line-color': '#3b82f6', 'line-width': 1 },
       });
+
+      // ── Google Hybrid raster source ──
+      map.addSource('google-hybrid', {
+        type: 'raster',
+        tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'],
+        tileSize: 256,
+      });
+      map.addLayer({
+        id: 'google-hybrid-layer',
+        type: 'raster',
+        source: 'google-hybrid',
+        paint: { 'raster-opacity': 0 },
+      }, 'segments-line');
+
+      // ── Google Satellite raster source ──
+      map.addSource('google-satellite', {
+        type: 'raster',
+        tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'],
+        tileSize: 256,
+      });
+      map.addLayer({
+        id: 'google-satellite-layer',
+        type: 'raster',
+        source: 'google-satellite',
+        paint: { 'raster-opacity': 0 },
+      }, 'segments-line');
 
       // ── Segment click handler ──
       map.on('click', 'segments-click', (e) => {
@@ -909,5 +937,65 @@ export default function MapView({
     }
   }, [liveLocation, mapLoaded]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  // ── HANDLE STYLE TOGGLE ──
+  useEffect(() => {
+    const map = mapObjRef.current;
+    if (!map || !mapLoaded) return;
+
+    try {
+      if (mapStyleType === 'hybrid') {
+        map.setPaintProperty('google-hybrid-layer', 'raster-opacity', 1);
+        map.setPaintProperty('google-satellite-layer', 'raster-opacity', 0);
+      } else if (mapStyleType === 'satellite') {
+        map.setPaintProperty('google-hybrid-layer', 'raster-opacity', 0);
+        map.setPaintProperty('google-satellite-layer', 'raster-opacity', 1);
+      } else {
+        map.setPaintProperty('google-hybrid-layer', 'raster-opacity', 0);
+        map.setPaintProperty('google-satellite-layer', 'raster-opacity', 0);
+      }
+    } catch (err) {
+      console.error('Failed to set map style:', err);
+    }
+  }, [mapStyleType, mapLoaded]);
+
+  return (
+    <div className="h-full w-full relative">
+      <div ref={containerRef} className="h-full w-full" />
+      
+      {/* Floating Style Selector */}
+      <div className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-1">
+        {showStyleMenu && (
+          <div className="bg-card border border-border rounded-xl shadow-lg p-1.5 flex flex-col gap-1 mb-1 transition-all">
+            <button
+              onClick={() => { setMapStyleType('street'); setShowStyleMenu(false); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all text-left ${mapStyleType === 'street' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+            >
+              Street View
+            </button>
+            <button
+              onClick={() => { setMapStyleType('hybrid'); setShowStyleMenu(false); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all text-left ${mapStyleType === 'hybrid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+            >
+              Hybrid Satellite
+            </button>
+            <button
+              onClick={() => { setMapStyleType('satellite'); setShowStyleMenu(false); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all text-left ${mapStyleType === 'satellite' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+            >
+              Pure Satellite
+            </button>
+          </div>
+        )}
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setShowStyleMenu(!showStyleMenu)}
+          className="bg-card shadow-sm border border-border rounded-xl flex items-center justify-center"
+          title="Change Map Style"
+        >
+          <Layers className="size-4" />
+        </Button>
+      </div>
+    </div>
+  );
 }
