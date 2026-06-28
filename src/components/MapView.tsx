@@ -23,7 +23,7 @@ function mkEl(svg: string, w: number, h: number, suppress: { current: boolean })
   el.style.cursor = 'pointer';
   el.addEventListener('click', () => {
     suppress.current = true;
-    setTimeout(() => { suppress.current = false; }, 0);
+    setTimeout(() => { suppress.current = false; }, 100);
   });
   return el;
 }
@@ -53,40 +53,136 @@ function circlePolygon(lng: number, lat: number, meters: number, n = 64) {
 
 // ---------- SVG icons ----------
 
-const JOINT_SVGS: Record<JointType, { svg: string; w: number; h: number; offset: number }> = {
-  Base: {
-    w: 32, h: 44, offset: 44,
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 44" width="32" height="44">
-      <path d="M16 0C7.2 0 0 7.2 0 16c0 12 16 28 16 28s16-16 16-28C32 7.2 24.8 0 16 0z" fill="#f97316"/>
-      <polygon points="16,6 18.5,12.5 25,13 20,17.5 21.5,24 16,20.5 10.5,24 12,17.5 7,13 13.5,12.5" fill="white"/>
-    </svg>`,
+// Pin colors per joint type
+const PIN_COLORS: Record<JointType, string> = {
+  Base: '#f97316',
+  Main: '#3b82f6',
+  Sub: '#eab308',
+  Splice: '#a855f7',
+};
+
+// Pin sizes per joint type
+const PIN_SIZES: Record<JointType, { w: number; h: number; offset: number; cx: number; cy: number; ir: number }> = {
+  Base:   { w: 32, h: 44, offset: 44, cx: 16, cy: 16, ir: 9 },
+  Main:   { w: 26, h: 38, offset: 38, cx: 13, cy: 13, ir: 7 },
+  Sub:    { w: 22, h: 32, offset: 32, cx: 11, cy: 11, ir: 6 },
+  Splice: { w: 20, h: 28, offset: 28, cx: 10, cy: 10, ir: 5 },
+};
+
+// Inner icon SVG paths — each returns content to draw inside a circle at (0,0) with radius `r`
+// We use a viewBox trick: draw at a fixed viewBox then position with x/y/width/height on the pin
+const ICON_INNER: Record<string, (cx: number, cy: number, r: number) => string> = {
+  default: (cx, cy, r) =>
+    `<circle cx="${cx}" cy="${cy}" r="${r * 0.55}" fill="white"/>`,
+  star: (cx, cy, r) => {
+    const s = r * 0.9;
+    const pts: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const aOuter = (i * 72 - 90) * Math.PI / 180;
+      const aInner = ((i * 72) + 36 - 90) * Math.PI / 180;
+      pts.push(`${cx + s * Math.cos(aOuter)},${cy + s * Math.sin(aOuter)}`);
+      pts.push(`${cx + s * 0.4 * Math.cos(aInner)},${cy + s * 0.4 * Math.sin(aInner)}`);
+    }
+    return `<polygon points="${pts.join(' ')}" fill="white"/>`;
   },
-  Main: {
-    w: 26, h: 38, offset: 38,
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38">
-      <path d="M13 0C5.8 0 0 5.8 0 13c0 9.75 13 25 13 25s13-15.25 13-25C26 5.8 20.2 0 13 0z" fill="#3b82f6"/>
-      <circle cx="13" cy="13" r="5" fill="white"/>
-    </svg>`,
+  home: (cx, cy, r) => {
+    const s = r * 0.85;
+    return `<g transform="translate(${cx - s}, ${cy - s}) scale(${(s * 2) / 24})">
+      <path d="M3 12l9-8 9 8" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5 10v8a1 1 0 001 1h3v-5h6v5h3a1 1 0 001-1v-8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>`;
   },
-  Sub: {
-    w: 22, h: 32, offset: 32,
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 32" width="22" height="32">
-      <path d="M11 0C4.9 0 0 4.9 0 11c0 8.25 11 21 11 21s11-12.75 11-21C22 4.9 17.1 0 11 0z" fill="#eab308"/>
-      <circle cx="11" cy="11" r="4" fill="white"/>
-    </svg>`,
+  building: (cx, cy, r) => {
+    const s = r * 0.85;
+    return `<g transform="translate(${cx - s}, ${cy - s}) scale(${(s * 2) / 24})">
+      <path d="M6 2h12v20H6z" fill="none" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M9 6h2M13 6h2M9 10h2M13 10h2M9 14h2M13 14h2" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M10 22v-4h4v4" fill="none" stroke="white" stroke-width="1.5"/>
+    </g>`;
   },
-  Splice: {
-    w: 20, h: 28, offset: 28,
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 28" width="20" height="28">
-      <path d="M10 0C4.5 0 0 4.5 0 10c0 7.5 10 18 10 18s10-10.5 10-18C20 4.5 15.5 0 10 0z" fill="#a855f7"/>
-      <circle cx="10" cy="10" r="4" fill="white"/>
-    </svg>`,
+  box: (cx, cy, r) => {
+    const s = r * 0.85;
+    return `<g transform="translate(${cx - s}, ${cy - s}) scale(${(s * 2) / 24})">
+      <rect x="3" y="7" width="18" height="13" rx="1.5" fill="none" stroke="white" stroke-width="2"/>
+      <path d="M3 11h18" stroke="white" stroke-width="1.5"/>
+      <path d="M8 7V4h8v3" fill="none" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M10 14h4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    </g>`;
+  },
+  pole: (cx, cy, r) => {
+    const s = r * 0.85;
+    return `<g transform="translate(${cx - s}, ${cy - s}) scale(${(s * 2) / 24})">
+      <path d="M12 2v20M6 6h12M4 10h4M16 10h4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </g>`;
+  },
+  manhole: (cx, cy, r) => {
+    const s = r * 0.85;
+    return `<g transform="translate(${cx - s}, ${cy - s}) scale(${(s * 2) / 24})">
+      <circle cx="12" cy="12" r="9" fill="none" stroke="white" stroke-width="2"/>
+      <path d="M5 12h14M12 5v14" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    </g>`;
+  },
+  cabinet: (cx, cy, r) => {
+    const s = r * 0.85;
+    return `<g transform="translate(${cx - s}, ${cy - s}) scale(${(s * 2) / 24})">
+      <rect x="4" y="3" width="16" height="18" rx="1.5" fill="none" stroke="white" stroke-width="2"/>
+      <path d="M4 12h16" stroke="white" stroke-width="1.5"/>
+      <circle cx="12" cy="7.5" r="1" fill="white"/>
+      <circle cx="12" cy="16.5" r="1" fill="white"/>
+    </g>`;
+  },
+  tower: (cx, cy, r) => {
+    const s = r * 0.85;
+    return `<g transform="translate(${cx - s}, ${cy - s}) scale(${(s * 2) / 24})">
+      <path d="M12 2v20M8 22l4-8 4 8M7 6l5 4 5-4" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M9 2a5 5 0 006 0" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    </g>`;
+  },
+  router: (cx, cy, r) => {
+    const s = r * 0.85;
+    return `<g transform="translate(${cx - s}, ${cy - s}) scale(${(s * 2) / 24})">
+      <rect x="3" y="10" width="18" height="8" rx="2" fill="none" stroke="white" stroke-width="2"/>
+      <circle cx="7" cy="14" r="1" fill="white"/>
+      <circle cx="11" cy="14" r="1" fill="white"/>
+      <path d="M12 4a4 4 0 014 4M12 7a1.5 1.5 0 011.5 1.5" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    </g>`;
   },
 };
 
-function getJointSVG(type?: JointType) {
-  return JOINT_SVGS[type ?? 'Main'];
+// Build an SVG string for a joint marker
+export function buildJointSVG(type: JointType, icon?: string): { svg: string; w: number; h: number; offset: number } {
+  const color = PIN_COLORS[type] || PIN_COLORS.Main;
+  const { w, h, offset, cx, cy, ir } = PIN_SIZES[type] || PIN_SIZES.Main;
+  const iconKey = icon && icon in ICON_INNER ? icon : (type === 'Base' ? 'star' : 'default');
+  const innerSvg = ICON_INNER[iconKey](cx, cy, ir);
+
+  const pinPath = type === 'Base'
+    ? `<path d="M${cx} 0C${cx * 0.45} 0 0 ${h * 0.164} 0 ${cy}c0 ${h * 0.273} ${cx} ${h * 0.636} ${cx} ${h * 0.636}s${cx}-${h * 0.364} ${cx}-${h * 0.636}C${w} ${h * 0.164} ${cx * 1.55} 0 ${cx} 0z" fill="${color}"/>`
+    : `<path d="M${cx} 0C${cx * 0.446} 0 0 ${(cy / h) * h * 0.446} 0 ${cy}c0 ${(h - cy) * 0.75} ${cx} ${h - cy} ${cx} ${h - cy}s${cx}-${(h - cy) * 0.25} ${cx}-${h - cy}C${w} ${(cy / h) * h * 0.446} ${cx * 1.554} 0 ${cx} 0z" fill="${color}"/>`;
+
+  return {
+    w, h, offset,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${pinPath}${innerSvg}</svg>`,
+  };
 }
+
+function getJointSVG(type?: JointType, icon?: string) {
+  return buildJointSVG(type ?? 'Main', icon);
+}
+
+// Export icon keys for use in icon pickers
+export const JOINT_ICON_OPTIONS: { key: string; label: string }[] = [
+  { key: 'default', label: 'Circle' },
+  { key: 'star', label: 'Star' },
+  { key: 'home', label: 'Home' },
+  { key: 'building', label: 'Building' },
+  { key: 'box', label: 'Joint Box' },
+  { key: 'pole', label: 'Utility Pole' },
+  { key: 'manhole', label: 'Manhole' },
+  { key: 'cabinet', label: 'Cabinet' },
+  { key: 'tower', label: 'Cell Tower' },
+  { key: 'router', label: 'Router' },
+];
 
 // ---------- popup components ----------
 
@@ -174,7 +270,7 @@ function JointPopup({ j, onEdit, onDelete, onApprove, onReject, onPhotoClick, us
   );
 }
 
-function SegmentPopup({ seg, fromLabel, toLabel, onSplice, onDelete, onApprove, onReject, userRole }: { seg: Segment, fromLabel: string, toLabel: string, onSplice: (id: string) => void, onDelete: (id: string) => void, onApprove?: (id: string) => void, onReject?: (id: string) => void, userRole?: UserRole | null }) {
+function SegmentPopup({ seg, fromLabel, toLabel, onEdit, onSplice, onDelete, onApprove, onReject, userRole }: { seg: Segment, fromLabel: string, toLabel: string, onEdit: (id: string) => void, onSplice: (id: string) => void, onDelete: (id: string) => void, onApprove?: (id: string) => void, onReject?: (id: string) => void, userRole?: UserRole | null }) {
   const dist = seg.lengthMeters >= 1000
     ? `${(seg.lengthMeters / 1000).toFixed(2)} km`
     : `${seg.lengthMeters.toFixed(0)} m`;
@@ -198,14 +294,22 @@ function SegmentPopup({ seg, fromLabel, toLabel, onSplice, onDelete, onApprove, 
         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{seg.cableType}</Badge>
         <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{seg.fiberCount} fibers</Badge>
       </div>
-      <p className="text-sm text-foreground">Length: <strong className="font-semibold">{dist}</strong></p>
+      <div className="text-sm text-foreground">
+        <p>Auto Length: <strong className="font-semibold">{dist}</strong></p>
+        {!!seg.extraLengthMeters && seg.extraLengthMeters > 0 && (
+          <p>Extra Length: <strong className="font-semibold">{seg.extraLengthMeters} m</strong></p>
+        )}
+      </div>
       <div className="text-[11px] text-muted-foreground flex flex-col gap-0.5">
         <p>From: <strong className="font-medium text-foreground">{fromLabel}</strong></p>
         <p>To: <strong className="font-medium text-foreground">{toLabel}</strong></p>
         <p className="mt-1">User: {seg.createdBy?.userName || 'Unknown'}</p>
       </div>
       <div className="flex flex-col gap-1.5 mt-2">
-        <Button variant="secondary" size="sm" className="w-full h-7 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200" onClick={() => onSplice(seg.id)}>
+        <Button variant="default" size="sm" className="w-full h-7 text-xs bg-blue-600 hover:bg-blue-700 cursor-pointer" onClick={() => onEdit(seg.id)}>
+          <Edit3 className="size-3.5 mr-1" /> Edit Segment
+        </Button>
+        <Button variant="secondary" size="sm" className="w-full h-7 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200 cursor-pointer" onClick={() => onSplice(seg.id)}>
           <Scissors className="size-3.5 mr-1.5" /> Add Splice Here
         </Button>
         {isOwner && (
@@ -240,6 +344,7 @@ interface MapViewProps {
   onDeleteJoint: (id: string) => void;
   onApproveJoint?: (id: string) => void;
   onRejectJoint?: (id: string) => void;
+  onEditSegment?: (id: string) => void;
   onDeleteSegment?: (id: string) => void;
   onApproveSegment?: (id: string) => void;
   onRejectSegment?: (id: string) => void;
@@ -258,10 +363,14 @@ interface MapViewProps {
   // ── placement marker ──
   placementMode?: boolean;
   placementPos?: { lat: number; lng: number } | null;
+  placementIcon?: string;
+  placementJointType?: JointType;
   onPlacementMarkerMove?: (lat: number, lng: number) => void;
   // ── move marker ──
   moveMode?: boolean;
   movePos?: { lat: number; lng: number } | null;
+  moveIcon?: string;
+  moveJointType?: JointType;
   onMoveMarkerMove?: (lat: number, lng: number) => void;
   // ── live location (owned by App.tsx) ──
   liveLocation?: { lat: number; lng: number; accuracy?: number } | null;
@@ -272,12 +381,12 @@ interface MapViewProps {
 // ---------- component ----------
 
 export default function MapView({
-  joints, segments, onMapClick, onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick,
+  joints, segments, onMapClick, onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onEditSegment, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick,
   highlightedSegmentIds, mapRef, onMapReady,
   waypointMode, pendingWaypoints, pendingFromJoint, pendingToJoint,
   spliceMode, spliceMarkerPos, onSpliceMarkerMove,
-  placementMode, placementPos, onPlacementMarkerMove,
-  moveMode, movePos, onMoveMarkerMove,
+  placementMode, placementPos, placementIcon, placementJointType, onPlacementMarkerMove,
+  moveMode, movePos, moveIcon, moveJointType, onMoveMarkerMove,
   liveLocation,
   userRole,
 }: MapViewProps) {
@@ -303,6 +412,7 @@ export default function MapView({
   const cbDelete = useRef(onDeleteJoint);
   const cbApprove = useRef(onApproveJoint);
   const cbReject = useRef(onRejectJoint);
+  const cbEditSeg = useRef(onEditSegment);
   const cbDeleteSeg = useRef(onDeleteSegment);
   const cbApproveSeg = useRef(onApproveSegment);
   const cbRejectSeg = useRef(onRejectSegment);
@@ -318,6 +428,7 @@ export default function MapView({
     cbDelete.current = onDeleteJoint;
     cbApprove.current = onApproveJoint;
     cbReject.current = onRejectJoint;
+    cbEditSeg.current = onEditSegment;
     cbDeleteSeg.current = onDeleteSegment;
     cbApproveSeg.current = onApproveSegment;
     cbRejectSeg.current = onRejectSegment;
@@ -327,7 +438,7 @@ export default function MapView({
     cbPlacementMove.current = onPlacementMarkerMove;
     cbMoveMove.current = onMoveMarkerMove;
     cbPhotoClick.current = (url: string) => setPreviewUrl(url);
-  }, [onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick, onMapClick, onSpliceMarkerMove, onPlacementMarkerMove, onMoveMarkerMove]);
+  }, [onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onEditSegment, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick, onMapClick, onSpliceMarkerMove, onPlacementMarkerMove, onMoveMarkerMove]);
 
   const jointsById = useMemo(() => {
     const m = new Map<string, FiberJoint>();
@@ -369,7 +480,7 @@ export default function MapView({
         paint: {
           'line-color': ['get', 'color'],
           'line-width': ['get', 'weight'],
-          'line-opacity': ['coalesce', ['get', 'opacity'], 0.85],
+          'line-opacity': ['get', 'opacity'],
         },
       });
       // Wide invisible hit area for clicks
@@ -393,7 +504,7 @@ export default function MapView({
         layout: {
           'text-field': ['get', 'label'],
           'text-size': 11,
-          'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+          'text-font': ['Noto Sans Regular'],
           'symbol-placement': 'point',
           'text-allow-overlap': false,
           'text-ignore-placement': false,
@@ -469,9 +580,10 @@ export default function MapView({
 
       // ── Segment click handler ──
       map.on('click', 'segments-click', (e) => {
+        if (suppressClick.current) return;
         e.originalEvent.stopPropagation();
         suppressClick.current = true;
-        setTimeout(() => { suppressClick.current = false; }, 0);
+        setTimeout(() => { suppressClick.current = false; }, 100);
         if (!e.features?.[0]) return;
 
         const segId = e.features[0].properties?.segmentId as string;
@@ -501,6 +613,10 @@ export default function MapView({
             fromLabel={fromLabel}
             toLabel={toLabel}
             userRole={userRole}
+            onEdit={(id) => {
+              segmentPopup.current?.remove();
+              cbEditSeg.current?.(id);
+            }}
             onSplice={(id) => {
               segmentPopup.current?.remove();
               suppressClick.current = true;
@@ -591,7 +707,7 @@ export default function MapView({
     }
 
     for (const j of joints) {
-      const { svg, w, h, offset } = getJointSVG(j.jointType);
+      const { svg, w, h, offset } = getJointSVG(j.jointType, j.icon);
       const ex = curr.get(j.id);
       const isPending = j.approvalStatus === 'PENDING' || j.approvalStatus === 'PENDING_EDIT';
       const isPendingDelete = j.approvalStatus === 'PENDING_DELETE';
@@ -830,11 +946,11 @@ export default function MapView({
 
     if (!placementMarkerRef.current) {
       const el = document.createElement('div');
-      el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38">
-        <path d="M13 0C5.8 0 0 5.8 0 13c0 9.75 13 25 13 25s13-15.25 13-25C26 5.8 20.2 0 13 0z" fill="#3b82f6"/>
-        <circle cx="13" cy="13" r="5" fill="white"/>
-      </svg>`;
+      const { svg, w, h } = getJointSVG(placementJointType, placementIcon);
+      el.innerHTML = svg;
       Object.assign(el.style, {
+        width: `${w}px`,
+        height: `${h}px`,
         cursor: 'grab',
         filter: 'drop-shadow(0 2px 6px rgba(59,130,246,0.6))',
         userSelect: 'none',
@@ -882,11 +998,11 @@ export default function MapView({
 
     if (!placementMarkerRef.current) {
       const el = document.createElement('div');
-      el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38">
-        <path d="M13 0C5.8 0 0 5.8 0 13c0 9.75 13 25 13 25s13-15.25 13-25C26 5.8 20.2 0 13 0z" fill="#f59e0b"/>
-        <circle cx="13" cy="13" r="5" fill="white"/>
-      </svg>`;
+      const { svg, w, h } = getJointSVG(moveJointType, moveIcon);
+      el.innerHTML = svg;
       Object.assign(el.style, {
+        width: `${w}px`,
+        height: `${h}px`,
         cursor: 'grab',
         filter: 'drop-shadow(0 2px 6px rgba(245,158,11,0.6))',
         userSelect: 'none',

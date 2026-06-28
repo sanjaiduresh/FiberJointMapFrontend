@@ -20,6 +20,7 @@ export interface FiberJoint {
   jointType: JointType;
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
+  icon?: string;
   lat: number;
   lng: number;
   organizationId: string;
@@ -36,6 +37,7 @@ export interface CreateJointPayload {
   jointType: JointType;
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
+  icon?: string;
   lat: number;
   lng: number;
   pendingPhotos?: File[];
@@ -50,6 +52,7 @@ export interface Segment {
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
   lengthMeters: number;
+  extraLengthMeters?: number;
   organizationId: string;
   createdBy: { userId: string; userName: string };
   approvalStatus: ApprovalStatus;
@@ -64,6 +67,7 @@ export interface CreateSegmentPayload {
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
   lengthMeters?: number;
+  extraLengthMeters?: number;
 }
 
 export interface SpliceJointPayload {

@@ -89,7 +89,7 @@ export default function App() {
 
   const {
     segments: approvedSegments, loading: asLoading, error: asError,
-    createSegment, deleteSegment, applySplice,
+    createSegment, updateSegment, deleteSegment, applySplice,
     approveSegment, rejectSegment,
     refetch: refetchApprovedSegments,
   } = useSegments(token, 'APPROVED,PENDING_EDIT,PENDING_DELETE');
@@ -157,7 +157,10 @@ export default function App() {
   const [editingJointId, setEditingJointId] = useState<string | null>(null);
   const editingJoint = joints.find(j => j.id === editingJointId) || null;
 
+  const [replacingSegmentId, setReplacingSegmentId] = useState<string | null>(null);
+
   const [moveModeJointId, setMoveModeJointId] = useState<string | null>(null);
+  const moveJoint = joints.find(j => j.id === moveModeJointId) || null;
   const [movePos, setMovePos] = useState<{ lat: number; lng: number } | null>(null);
   const [moveIsSaving, setMoveIsSaving] = useState(false);
 
@@ -179,7 +182,7 @@ export default function App() {
     toJointId: string;
     cableType: 'Single Mode' | 'Multi Mode';
     fiberCount: number;
-    lengthMeters: string;
+    extraLengthMeters: string;
   } | null>(null);
   const [waypointsDone, setWaypointsDone] = useState(false);
 
@@ -229,10 +232,11 @@ export default function App() {
       return;
     }
     if (spliceMode || placementMode || moveModeJointId) return;
+    if (!isDraftMap) return;
     setAddJointModalCoords({ lat, lng });
   };
 
-  const handlePickWaypoints = (state: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; lengthMeters: string }) => {
+  const handlePickWaypoints = (state: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; extraLengthMeters: string }) => {
     setPendingConnection(state);
     setPendingWaypoints([]);
     setWaypointMode(true);
@@ -250,6 +254,22 @@ export default function App() {
     setWaypointMode(false);
     setPendingWaypoints([]);
     setPendingConnection(null);
+    setShowConnectionModal(true);
+  };
+
+  const handleEditSegment = (id: string) => {
+    const seg = segments.find(s => s.id === id);
+    if (!seg) return;
+    setReplacingSegmentId(id);
+    setPendingConnection({
+      fromJointId: seg.fromJointId,
+      toJointId: seg.toJointId,
+      cableType: seg.cableType,
+      fiberCount: seg.fiberCount,
+      extraLengthMeters: (seg.extraLengthMeters || 0).toString(),
+    });
+    setPendingWaypoints(seg.waypoints || []);
+    setWaypointsDone(false);
     setShowConnectionModal(true);
   };
 
@@ -635,7 +655,7 @@ export default function App() {
 
         {/* ── Waypoint mode banner ── */}
         {waypointMode && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex gap-2">
             <Badge className="h-7 px-3 text-xs font-medium shadow-md bg-purple-500 text-white flex items-center gap-1.5">
               <MapPin className="size-3" /> Click map to place turns — {pendingWaypoints.length} placed
             </Badge>
@@ -931,14 +951,19 @@ export default function App() {
           pendingWaypoints={pendingWaypoints}
           pendingFromJoint={pendingFromJoint}
           pendingToJoint={pendingToJoint}
+          onEditSegment={handleEditSegment}
           spliceMode={spliceMode}
           spliceMarkerPos={spliceMarkerPos}
           onSpliceMarkerMove={handleSpliceMarkerMove}
           placementMode={placementMode}
           placementPos={placementPos}
+          placementIcon={placementData?.icon}
+          placementJointType={placementData?.jointType}
           onPlacementMarkerMove={(lat, lng) => setPlacementPos({ lat, lng })}
           moveMode={!!moveModeJointId}
           movePos={movePos}
+          moveIcon={moveJoint?.icon}
+          moveJointType={moveJoint?.jointType}
           onMoveMarkerMove={(lat, lng) => setMovePos({ lat, lng })}
           liveLocation={liveLocation}
           userRole={role}
@@ -989,19 +1014,25 @@ export default function App() {
       {showConnectionModal && (
         <AddConnectionModal
           joints={joints}
+          isEditing={!!replacingSegmentId}
           onSubmit={async (payload) => {
+            if (replacingSegmentId) {
+              await deleteSegment(replacingSegmentId);
+            }
             await createSegment(payload);
             const from = joints.find((j) => j.id === payload.fromJointId);
             const to = joints.find((j) => j.id === payload.toJointId);
-            showToast(`Connected ${from?.label} to ${to?.label}`);
+            showToast(replacingSegmentId ? 'Connection updated!' : `Connected ${from?.label} to ${to?.label}`);
             setPendingWaypoints([]);
             setPendingConnection(null);
+            setReplacingSegmentId(null);
             setWaypointsDone(false);
           }}
           onClose={() => {
             setShowConnectionModal(false);
             setPendingWaypoints([]);
             setPendingConnection(null);
+            setReplacingSegmentId(null);
             setWaypointsDone(false);
           }}
           onPickWaypoints={handlePickWaypoints}
@@ -1011,6 +1042,7 @@ export default function App() {
           pendingConnection={pendingConnection}
         />
       )}
+
 
       {spliceModalData && (
         <SpliceJointModal

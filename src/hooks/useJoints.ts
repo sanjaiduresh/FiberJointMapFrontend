@@ -13,6 +13,7 @@ interface RawJoint {
   jointType: 'Base' | 'Main' | 'Sub' | 'Splice';
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
+  icon?: string;
   lat: number;
   lng: number;
   createdBy: { userId: string; userName: string };
@@ -30,6 +31,7 @@ function mapJoint(raw: RawJoint): FiberJoint {
     jointType: raw.jointType || 'Main',
     cableType: raw.cableType || 'Single Mode',
     fiberCount: raw.fiberCount ?? 12,
+    icon: raw.icon || 'default',
     lat: raw.lat,
     lng: raw.lng,
     organizationId: raw.organizationId || '',

@@ -4,11 +4,13 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { AlertCircle, MapPin, Building2, CircleDot, Circle, Scissors, Camera, Upload, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import IconPicker from './IconPicker';
 
 
 interface AddJointModalProps {
@@ -34,6 +36,7 @@ export default function AddJointModal({
   const [jointType, setJointType] = useState<JointType>(defaultType);
   const [cableType, setCableType] = useState<'Single Mode' | 'Multi Mode'>('Single Mode');
   const [fiberCount, setFiberCount] = useState(12);
+  const [icon, setIcon] = useState(() => localStorage.getItem('lastSelectedJointIcon') || 'default');
   const [error, setError] = useState('');
   const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
 
@@ -49,12 +52,14 @@ export default function AddJointModal({
     e.preventDefault();
     if (!label.trim()) { setError('Label is required'); return; }
     setError('');
+    localStorage.setItem('lastSelectedJointIcon', icon);
     onSubmit({
       label: label.trim(),
       notes,
       jointType,
       cableType,
       fiberCount,
+      icon,
       pendingPhotos,
     });
     onClose();
@@ -77,12 +82,12 @@ export default function AddJointModal({
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="grid gap-4">
+        <form onSubmit={handleSubmit} className="grid gap-3">
 
           {/* Joint Type */}
           <div className="grid gap-1.5">
             <Label>Joint Type <span className="text-destructive">*</span></Label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-1.5">
               {JOINT_TYPES.map((t) => {
                 const Icon = t.icon;
                 return (
@@ -91,33 +96,38 @@ export default function AddJointModal({
                     type="button"
                     onClick={() => setJointType(t.value)}
                     className={cn(
-                      'flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-center transition-all',
+                      'flex flex-col items-center gap-0.5 p-2 rounded-xl border-2 text-center transition-all',
                       jointType === t.value
                         ? t.color + ' border-current'
                         : 'border-border bg-card hover:bg-muted',
                     )}
                   >
-                    <Icon className="size-5 mb-1" />
-                    <span className="text-[12px] font-semibold leading-tight">
+                    <Icon className="size-4 mb-0.5" />
+                    <span className="text-[11px] font-semibold leading-tight">
                       {t.label}
                     </span>
-                    <span className="text-[9px] text-muted-foreground leading-tight">{t.desc}</span>
+                    <span className="text-[9px] text-muted-foreground leading-tight hidden sm:block">{t.desc}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Label */}
-          <div className="grid gap-1.5">
-            <Label htmlFor="joint-label">Label <span className="text-destructive">*</span></Label>
-            <Input
-              id="joint-label"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Junction Box A"
-              autoFocus
-            />
+          <div className="flex gap-3">
+            {/* Label */}
+            <div className="grid gap-1.5 flex-1">
+              <Label htmlFor="joint-label">Label <span className="text-destructive">*</span></Label>
+              <Input
+                id="joint-label"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="e.g. Junction Box A"
+                autoFocus
+              />
+            </div>
+
+            {/* Icon Picker */}
+            <IconPicker value={icon} onChange={setIcon} jointType={jointType} />
           </div>
 
           {/* Notes */}

@@ -12,6 +12,7 @@ export interface RawSegment {
   cableType: 'Single Mode' | 'Multi Mode';
   fiberCount: number;
   lengthMeters: number;
+  extraLengthMeters?: number;
   createdBy: { userId: string; userName: string };
   organizationId: string;
   approvalStatus: ApprovalStatus;
@@ -27,6 +28,7 @@ function mapSegment(raw: RawSegment): Segment {
     cableType: raw.cableType,
     fiberCount: raw.fiberCount,
     lengthMeters: raw.lengthMeters,
+    extraLengthMeters: raw.extraLengthMeters || 0,
     createdBy: raw.createdBy,
     organizationId: raw.organizationId || '',
     approvalStatus: raw.approvalStatus || 'APPROVED',
@@ -74,6 +76,22 @@ export function useSegments(token: string | null, approvalStatusFilter?: string)
     const newSegment = mapSegment(raw);
     setSegments((prev) => [newSegment, ...prev]);
     return newSegment;
+  }, [token]);
+
+  const updateSegment = useCallback(async (id: string, payload: Partial<CreateSegmentPayload>) => {
+    const res = await fetch(`${API_URL}/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to update segment');
+    const raw: RawSegment = await res.json();
+    const updated = mapSegment(raw);
+    setSegments((prev) => prev.map((s) => (s.id === id ? updated : s)));
+    return updated;
   }, [token]);
 
   const deleteSegment = useCallback(async (id: string) => {
@@ -136,7 +154,7 @@ export function useSegments(token: string | null, approvalStatusFilter?: string)
 
   return {
     segments, loading, error,
-    createSegment, deleteSegment,
+    createSegment, updateSegment, deleteSegment,
     approveSegment, rejectSegment,
     applySplice,
     refetch: fetchSegments,

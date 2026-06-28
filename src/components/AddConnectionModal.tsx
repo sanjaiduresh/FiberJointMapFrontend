@@ -15,13 +15,14 @@ import { cn } from '@/lib/utils';
 
 interface AddConnectionModalProps {
   joints: FiberJoint[];
+  isEditing?: boolean;
   onSubmit: (payload: CreateSegmentPayload) => Promise<void>;
   onClose: () => void;
-  onPickWaypoints: (state: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; lengthMeters: string }) => void;
+  onPickWaypoints: (state: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; extraLengthMeters: string }) => void;
   pendingWaypoints: Array<{ lat: number; lng: number }>;
   waypointsDone: boolean;
   onResetWaypointsDone: () => void;
-  pendingConnection?: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; lengthMeters: string } | null;
+  pendingConnection?: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; extraLengthMeters: string } | null;
 }
 
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -48,14 +49,14 @@ function calcRouteDistance(
 }
 
 export default function AddConnectionModal({
-  joints, onSubmit, onClose,
+  joints, isEditing, onSubmit, onClose,
   onPickWaypoints, pendingWaypoints, onResetWaypointsDone, pendingConnection,
 }: AddConnectionModalProps) {
   const [fromJointId, setFromJointId] = useState(pendingConnection?.fromJointId || (joints.length > 0 ? joints[0].id : ''));
   const [toJointId, setToJointId] = useState(pendingConnection?.toJointId || (joints.length > 1 ? joints[1].id : ''));
   const [cableType, setCableType] = useState<'Single Mode' | 'Multi Mode'>(pendingConnection?.cableType || 'Single Mode');
   const [fiberCount, setFiberCount] = useState(pendingConnection?.fiberCount || 12);
-  const [lengthMeters, setLengthMeters] = useState<string>(pendingConnection?.lengthMeters || '');
+  const [extraLengthMeters, setExtraLengthMeters] = useState<string>(pendingConnection?.extraLengthMeters || '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [routeType, setRouteType] = useState<'direct' | 'custom'>(pendingWaypoints.length > 0 ? 'custom' : 'direct');
@@ -74,10 +75,10 @@ export default function AddConnectionModal({
     setSubmitting(true);
     setError('');
     try {
-      const meters = parseFloat(lengthMeters);
+      const extraMeters = parseFloat(extraLengthMeters);
       await onSubmit({
         fromJointId, toJointId, waypoints: routeType === 'direct' ? [] : pendingWaypoints, cableType, fiberCount,
-        lengthMeters: meters > 0 ? meters : undefined,
+        extraLengthMeters: extraMeters > 0 ? extraMeters : undefined,
       });
       onClose();
     } catch {
@@ -91,7 +92,7 @@ export default function AddConnectionModal({
     if (!fromJointId || !toJointId) { setError('Please select both joints first'); return; }
     if (fromJointId === toJointId) { setError('Cannot connect a joint to itself'); return; }
     onResetWaypointsDone();
-    onPickWaypoints({ fromJointId, toJointId, cableType, fiberCount, lengthMeters });
+    onPickWaypoints({ fromJointId, toJointId, cableType, fiberCount, extraLengthMeters });
   };
 
   return (
@@ -99,12 +100,12 @@ export default function AddConnectionModal({
       <DialogContent className="sm:max-w-md max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
-              <Link className="size-5 text-purple-600" />
+            <div className={`size-10 rounded-lg ${isEditing ? 'bg-blue-500/15' : 'bg-purple-500/15'} flex items-center justify-center shrink-0`}>
+              <Link className={`size-5 ${isEditing ? 'text-blue-600' : 'text-purple-600'}`} />
             </div>
             <div>
-              <DialogTitle>Add Connection</DialogTitle>
-              <DialogDescription>Connect two fiber joints with route</DialogDescription>
+              <DialogTitle>{isEditing ? 'Edit Connection' : 'Add Connection'}</DialogTitle>
+              <DialogDescription>{isEditing ? 'Recreate the connection with updated settings' : 'Connect two fiber joints with route'}</DialogDescription>
             </div>
           </div>
         </DialogHeader>
@@ -309,24 +310,26 @@ export default function AddConnectionModal({
                 </div>
               )}
 
-              {/* Length */}
-              <div className="grid gap-1.5">
-                <Label htmlFor="conn-length">Cable Length (meters)</Label>
-                <Input
-                  id="conn-length"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={lengthMeters}
-                  onChange={(e) => setLengthMeters(e.target.value)}
-                  placeholder={suggestedDistance > 0 ? `Auto: ~${suggestedDistance.toFixed(1)}m` : 'Enter cable length'}
-                />
-                {suggestedDistance > 0 && (
-                  <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                    <Ruler className="size-3" /> Auto-calculated: ~{suggestedDistance.toFixed(1)}m
-                    {!lengthMeters && ' (will be used if left empty)'}
-                  </p>
-                )}
+              {/* Lengths */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label>Auto-calculated Route Length</Label>
+                  <div className="h-9 px-3 flex items-center border border-input rounded-md bg-muted text-sm text-muted-foreground">
+                    ~{suggestedDistance > 0 ? suggestedDistance.toFixed(1) : '0.0'} m
+                  </div>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="conn-extra-length">Extra Wire Length (m)</Label>
+                  <Input
+                    id="conn-extra-length"
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    value={extraLengthMeters}
+                    onChange={(e) => setExtraLengthMeters(e.target.value)}
+                    placeholder="e.g. 5.5"
+                  />
+                </div>
               </div>
             </>
           )}
@@ -343,7 +346,7 @@ export default function AddConnectionModal({
               Cancel
             </Button>
             <Button type="submit" disabled={submitting || joints.length < 2} className="flex-1">
-              {submitting ? <><Loader2 className="size-4 animate-spin" />Connecting...</> : 'Create Connection'}
+              {submitting ? <><Loader2 className="size-4 animate-spin" />{isEditing ? 'Saving...' : 'Connecting...'}</> : isEditing ? 'Save Changes' : 'Create Connection'}
             </Button>
           </div>
         </form>

@@ -4,11 +4,13 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { AlertCircle, Loader2, Edit3, Building2, CircleDot, Circle, Scissors, MapPin, Navigation, Camera, Trash2, X, Upload, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import IconPicker from './IconPicker';
 
 
 interface EditJointModalProps {
@@ -37,6 +39,7 @@ export default function EditJointModal({
   const [jointType, setJointType] = useState<JointType>(joint.jointType);
   const [cableType, setCableType] = useState<'Single Mode' | 'Multi Mode'>(joint.cableType);
   const [fiberCount, setFiberCount] = useState(joint.fiberCount);
+  const [icon, setIcon] = useState(joint.icon || 'default');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -56,6 +59,7 @@ export default function EditJointModal({
         jointType,
         cableType,
         fiberCount,
+        icon,
       });
       onClose();
     } catch {
@@ -112,12 +116,12 @@ export default function EditJointModal({
             </div>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="grid gap-4">
+          <form onSubmit={handleSubmit} className="grid gap-3">
 
             {/* Joint Type */}
             <div className="grid gap-1.5">
               <Label>Joint Type <span className="text-destructive">*</span></Label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-1.5">
                 {JOINT_TYPES.map((t) => {
                   const Icon = t.icon;
                   return (
@@ -126,25 +130,26 @@ export default function EditJointModal({
                       type="button"
                       onClick={() => setJointType(t.value)}
                       className={cn(
-                        'flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-center transition-all cursor-pointer',
+                        'flex flex-col items-center gap-0.5 p-2 rounded-xl border-2 text-center transition-all cursor-pointer',
                         jointType === t.value
                           ? t.color + ' border-current'
                           : 'border-border bg-card hover:bg-muted',
                       )}
                     >
-                      <Icon className="size-5 mb-1" />
-                      <span className="text-[12px] font-semibold leading-tight">
+                      <Icon className="size-4 mb-0.5" />
+                      <span className="text-[11px] font-semibold leading-tight">
                         {t.label}
                       </span>
-                      <span className="text-[9px] text-muted-foreground leading-tight">{t.desc}</span>
+                      <span className="text-[9px] text-muted-foreground leading-tight hidden sm:block">{t.desc}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
+            <div className="flex gap-3">
             {/* Label */}
-            <div className="grid gap-1.5">
+            <div className="grid gap-1.5 flex-1">
               <Label htmlFor="joint-label">Label <span className="text-destructive">*</span></Label>
               <Input
                 id="joint-label"
@@ -154,6 +159,10 @@ export default function EditJointModal({
                 autoFocus
               />
             </div>
+
+            {/* Icon Picker */}
+            <IconPicker value={icon} onChange={setIcon} jointType={jointType} />
+          </div>
 
             {/* Notes */}
             <div className="grid gap-1.5">
