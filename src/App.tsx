@@ -2,6 +2,7 @@ import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { useJoints } from './hooks/useJoints';
 import { useSegments } from './hooks/useSegments';
+import { useWires } from './hooks/useWires';
 import MapView from './components/MapView';
 import type { MapLibreMap } from './components/MapView';
 import { BASE_LAT, BASE_LNG } from './components/MapView';
@@ -18,10 +19,12 @@ import type { Segment, CreateJointPayload } from './types';
 import {
   PanelLeftClose, PanelLeftOpen, Building, Locate,
   MapPin, Plus, Link, X, Undo2, Check, Loader2, LogOut,
-  Map as MapIcon, Settings, Trash2, Scissors, Circle, CircleDot,
+  Map as MapIcon, Settings, Trash2, Scissors, Circle, CircleDot, Cable,
 } from 'lucide-react';
 import SpliceJointModal from './components/SpliceJointModal';
 import EditJointModal from './components/EditJointModal';
+import EditConnectionModal from './components/EditConnectionModal';
+import WireManagerModal from './components/WireManagerModal';
 import TeamManagement from './components/TeamManagement';
 import AdminDashboard from './components/AdminDashboard';
 
@@ -99,6 +102,18 @@ export default function App() {
     refetch: refetchDraftSegments,
   } = useSegments(token);
 
+  // Wires
+  const {
+    wires, createWire, updateWire, deleteWire,
+  } = useWires(token);
+
+  // Wire lookup map
+  const wiresById = useMemo(() => {
+    const m = new Map<string, typeof wires[0]>();
+    wires.forEach(w => m.set(w.id, w));
+    return m;
+  }, [wires]);
+
   // Active data based on map mode
   const joints = useMemo(() => {
     const rawJoints = isDraftMap ? allJoints : approvedJoints;
@@ -145,6 +160,9 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [teamManagementOpen, setTeamManagementOpen] = useState(false);
+  const [wireManagerOpen, setWireManagerOpen] = useState(false);
+  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
+  const editingSegment = editingSegmentId ? segments.find(s => s.id === editingSegmentId) || null : null;
   const mapRef = useRef<MapLibreMap | null>(null);
 
   // ── placement mode state ──
@@ -183,6 +201,7 @@ export default function App() {
     cableType: 'Single Mode' | 'Multi Mode';
     fiberCount: number;
     extraLengthMeters: string;
+    wireId?: string;
   } | null>(null);
   const [waypointsDone, setWaypointsDone] = useState(false);
 
@@ -236,7 +255,7 @@ export default function App() {
     setAddJointModalCoords({ lat, lng });
   };
 
-  const handlePickWaypoints = (state: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; extraLengthMeters: string }) => {
+  const handlePickWaypoints = (state: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; extraLengthMeters: string; wireId?: string }) => {
     setPendingConnection(state);
     setPendingWaypoints([]);
     setWaypointMode(true);
@@ -260,17 +279,7 @@ export default function App() {
   const handleEditSegment = (id: string) => {
     const seg = segments.find(s => s.id === id);
     if (!seg) return;
-    setReplacingSegmentId(id);
-    setPendingConnection({
-      fromJointId: seg.fromJointId,
-      toJointId: seg.toJointId,
-      cableType: seg.cableType,
-      fiberCount: seg.fiberCount,
-      extraLengthMeters: (seg.extraLengthMeters || 0).toString(),
-    });
-    setPendingWaypoints(seg.waypoints || []);
-    setWaypointsDone(false);
-    setShowConnectionModal(true);
+    setEditingSegmentId(id);
   };
 
   const handleUndoWaypoint = () => {
@@ -898,7 +907,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => { setShowAddMenu(false); setShowConnectionModal(true); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted transition-colors text-left border-b border-border"
                 >
                   <div className="size-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
                     <Link className="size-4 text-purple-600" />
@@ -906,6 +915,18 @@ export default function App() {
                   <div>
                     <p className="text-sm font-medium text-foreground">Add Connection</p>
                     <p className="text-[10px] text-muted-foreground">Link two joints</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => { setShowAddMenu(false); setWireManagerOpen(true); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted transition-colors text-left"
+                >
+                  <div className="size-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                    <Cable className="size-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Manage Wires</p>
+                    <p className="text-[10px] text-muted-foreground">Create wire types &amp; colors</p>
                   </div>
                 </button>
               </div>
@@ -967,6 +988,7 @@ export default function App() {
           onMoveMarkerMove={(lat, lng) => setMovePos({ lat, lng })}
           liveLocation={liveLocation}
           userRole={role}
+          wiresById={wiresById}
         />
       </div>
 
@@ -1014,6 +1036,7 @@ export default function App() {
       {showConnectionModal && (
         <AddConnectionModal
           joints={joints}
+          wires={wires}
           isEditing={!!replacingSegmentId}
           onSubmit={async (payload) => {
             if (replacingSegmentId) {
@@ -1040,6 +1063,35 @@ export default function App() {
           waypointsDone={waypointsDone}
           onResetWaypointsDone={() => setWaypointsDone(false)}
           pendingConnection={pendingConnection}
+          onManageWires={() => setWireManagerOpen(true)}
+        />
+      )}
+
+      {editingSegment && (
+        <EditConnectionModal
+          segment={editingSegment}
+          joints={joints}
+          wires={wires}
+          onSubmit={async (payload) => {
+            await updateSegment(editingSegment.id, payload);
+            showToast('Connection updated!');
+            setEditingSegmentId(null);
+          }}
+          onClose={() => {
+            setEditingSegmentId(null);
+            setPendingWaypoints([]);
+            setWaypointsDone(false);
+          }}
+          onPickWaypoints={(existingWaypoints) => {
+            setPendingWaypoints(existingWaypoints);
+            setWaypointMode(true);
+            setEditingSegmentId(null);
+            showToast('Click on the map to place turns along the cable route');
+          }}
+          pendingWaypoints={pendingWaypoints}
+          waypointsDone={waypointsDone}
+          onResetWaypointsDone={() => setWaypointsDone(false)}
+          onManageWires={() => setWireManagerOpen(true)}
         />
       )}
 
@@ -1072,6 +1124,17 @@ export default function App() {
         open={teamManagementOpen}
         onClose={() => setTeamManagementOpen(false)}
       />
+
+      {/* ── Wire Manager ── */}
+      {wireManagerOpen && (
+        <WireManagerModal
+          wires={wires}
+          onCreateWire={createWire}
+          onUpdateWire={updateWire}
+          onDeleteWire={deleteWire}
+          onClose={() => setWireManagerOpen(false)}
+        />
+      )}
 
       {/* ── Settings Sheet ──────────────────────────────────────────────────── */}
 

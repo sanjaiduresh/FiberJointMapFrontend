@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CreateSegmentPayload, FiberJoint } from '../types';
+import type { CreateSegmentPayload, FiberJoint, Wire } from '../types';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -10,19 +10,21 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Link, Loader2, AlertCircle, MapIcon, AlertTriangle, Ruler, Type, CornerUpRight, Check, ChevronsUpDown } from 'lucide-react';
+import { Link, Loader2, AlertCircle, MapIcon, AlertTriangle, Ruler, Type, CornerUpRight, Check, ChevronsUpDown, Cable, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AddConnectionModalProps {
   joints: FiberJoint[];
+  wires: Wire[];
   isEditing?: boolean;
   onSubmit: (payload: CreateSegmentPayload) => Promise<void>;
   onClose: () => void;
-  onPickWaypoints: (state: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; extraLengthMeters: string }) => void;
+  onPickWaypoints: (state: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; extraLengthMeters: string; wireId: string }) => void;
   pendingWaypoints: Array<{ lat: number; lng: number }>;
   waypointsDone: boolean;
   onResetWaypointsDone: () => void;
-  pendingConnection?: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; extraLengthMeters: string } | null;
+  pendingConnection?: { fromJointId: string; toJointId: string; cableType: 'Single Mode' | 'Multi Mode'; fiberCount: number; extraLengthMeters: string; wireId?: string } | null;
+  onManageWires: () => void;
 }
 
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -49,14 +51,16 @@ function calcRouteDistance(
 }
 
 export default function AddConnectionModal({
-  joints, isEditing, onSubmit, onClose,
+  joints, wires, isEditing, onSubmit, onClose,
   onPickWaypoints, pendingWaypoints, onResetWaypointsDone, pendingConnection,
+  onManageWires,
 }: AddConnectionModalProps) {
   const [fromJointId, setFromJointId] = useState(pendingConnection?.fromJointId || (joints.length > 0 ? joints[0].id : ''));
   const [toJointId, setToJointId] = useState(pendingConnection?.toJointId || (joints.length > 1 ? joints[1].id : ''));
   const [cableType, setCableType] = useState<'Single Mode' | 'Multi Mode'>(pendingConnection?.cableType || 'Single Mode');
   const [fiberCount, setFiberCount] = useState(pendingConnection?.fiberCount || 12);
   const [extraLengthMeters, setExtraLengthMeters] = useState<string>(pendingConnection?.extraLengthMeters || '');
+  const [wireId, setWireId] = useState<string>(pendingConnection?.wireId || '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [routeType, setRouteType] = useState<'direct' | 'custom'>(pendingWaypoints.length > 0 ? 'custom' : 'direct');
@@ -79,6 +83,7 @@ export default function AddConnectionModal({
       await onSubmit({
         fromJointId, toJointId, waypoints: routeType === 'direct' ? [] : pendingWaypoints, cableType, fiberCount,
         extraLengthMeters: extraMeters > 0 ? extraMeters : undefined,
+        wireId: wireId && wireId !== 'none' ? wireId : undefined,
       });
       onClose();
     } catch {
@@ -92,7 +97,7 @@ export default function AddConnectionModal({
     if (!fromJointId || !toJointId) { setError('Please select both joints first'); return; }
     if (fromJointId === toJointId) { setError('Cannot connect a joint to itself'); return; }
     onResetWaypointsDone();
-    onPickWaypoints({ fromJointId, toJointId, cableType, fiberCount, extraLengthMeters });
+    onPickWaypoints({ fromJointId, toJointId, cableType, fiberCount, extraLengthMeters, wireId });
   };
 
   return (
@@ -248,6 +253,78 @@ export default function AddConnectionModal({
                     onChange={(e) => setFiberCount(parseInt(e.target.value) || 1)}
                   />
                 </div>
+              </div>
+
+              {/* Wire Selection */}
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="conn-wire">Wire Type</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={onManageWires}
+                    className="text-[10px] text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-5 px-1.5 gap-1"
+                  >
+                    <Settings2 className="size-3" />
+                    Manage
+                  </Button>
+                </div>
+                {wires.length === 0 ? (
+                  <div className="text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2.5 flex items-center gap-2">
+                    <Cable className="size-3.5 shrink-0" />
+                    <span>No wires created yet.</span>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="xs"
+                      onClick={onManageWires}
+                      className="text-[11px] text-emerald-600 hover:text-emerald-700 h-auto p-0 underline"
+                    >
+                      Create one
+                    </Button>
+                  </div>
+                ) : (
+                  <Select value={wireId} onValueChange={(v) => setWireId(v || '')}>
+                    <SelectTrigger id="conn-wire">
+                      <SelectValue placeholder="Select wire (optional)">
+                        {wireId && wireId !== 'none' ? (
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="size-3 rounded-full shrink-0 ring-1 ring-black/10"
+                              style={{ backgroundColor: wires.find(w => w.id === wireId)?.color || '#888' }}
+                            />
+                            {wires.find(w => w.id === wireId)?.name || 'Unknown'}
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <span className="size-3 rounded-full shrink-0 bg-blue-500 ring-1 ring-black/10" />
+                            No wire (default blue)
+                          </span>
+                        )}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        <span className="flex items-center gap-2">
+                          <span className="size-3 rounded-full shrink-0 bg-blue-500 ring-1 ring-black/10" />
+                          No wire (default blue)
+                        </span>
+                      </SelectItem>
+                      {wires.map((w) => (
+                        <SelectItem key={w.id} value={w.id}>
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="size-3 rounded-full shrink-0 ring-1 ring-black/10"
+                              style={{ backgroundColor: w.color }}
+                            />
+                            {w.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Route Type */}

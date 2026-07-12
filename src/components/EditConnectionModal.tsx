@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import type { CreateSegmentPayload, Segment, FiberJoint } from '../types';
+import { useState } from 'react';
+import type { CreateSegmentPayload, Segment, FiberJoint, Wire } from '../types';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Link, Loader2, AlertCircle, Edit3, MapIcon, Type, CornerUpRight } from 'lucide-react';
+import { Link, Loader2, AlertCircle, Edit3, MapIcon, Type, CornerUpRight, Cable, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -37,21 +37,25 @@ function calcRouteDistance(
 interface EditConnectionModalProps {
   segment: Segment;
   joints: FiberJoint[];
+  wires: Wire[];
   onSubmit: (payload: Partial<CreateSegmentPayload>) => Promise<void>;
   onClose: () => void;
   onPickWaypoints: (waypoints: Array<{ lat: number; lng: number }>) => void;
   pendingWaypoints: Array<{ lat: number; lng: number }>;
   waypointsDone: boolean;
   onResetWaypointsDone: () => void;
+  onManageWires: () => void;
 }
 
 export default function EditConnectionModal({
-  segment, joints, onSubmit, onClose,
-  onPickWaypoints, pendingWaypoints, waypointsDone, onResetWaypointsDone
+  segment, joints, wires, onSubmit, onClose,
+  onPickWaypoints, pendingWaypoints, waypointsDone, onResetWaypointsDone,
+  onManageWires,
 }: EditConnectionModalProps) {
   const [cableType, setCableType] = useState<'Single Mode' | 'Multi Mode'>(segment.cableType);
   const [fiberCount, setFiberCount] = useState(segment.fiberCount);
   const [extraLengthMeters, setExtraLengthMeters] = useState<string>(segment.extraLengthMeters?.toString() || '0');
+  const [wireId, setWireId] = useState<string>(segment.wireId || '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   
@@ -78,6 +82,7 @@ export default function EditConnectionModal({
         fiberCount,
         extraLengthMeters: extraMeters >= 0 ? extraMeters : 0,
         waypoints: routeType === 'direct' ? [] : currentWaypoints,
+        wireId: wireId && wireId !== 'none' ? wireId : undefined,
       });
     } catch {
       setError('Failed to update connection');
@@ -131,6 +136,78 @@ export default function EditConnectionModal({
                 onChange={(e) => setFiberCount(parseInt(e.target.value) || 1)}
               />
             </div>
+          </div>
+
+          {/* Wire Selection */}
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="edit-conn-wire">Wire Type</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={onManageWires}
+                className="text-[10px] text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-5 px-1.5 gap-1"
+              >
+                <Settings2 className="size-3" />
+                Manage
+              </Button>
+            </div>
+            {wires.length === 0 ? (
+              <div className="text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2.5 flex items-center gap-2">
+                <Cable className="size-3.5 shrink-0" />
+                <span>No wires created yet.</span>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="xs"
+                  onClick={onManageWires}
+                  className="text-[11px] text-emerald-600 hover:text-emerald-700 h-auto p-0 underline"
+                >
+                  Create one
+                </Button>
+              </div>
+            ) : (
+              <Select value={wireId} onValueChange={(v) => setWireId(v || '')}>
+                <SelectTrigger id="edit-conn-wire">
+                  <SelectValue placeholder="Select wire (optional)">
+                    {wireId && wireId !== 'none' ? (
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="size-3 rounded-full shrink-0 ring-1 ring-black/10"
+                          style={{ backgroundColor: wires.find(w => w.id === wireId)?.color || '#888' }}
+                        />
+                        {wires.find(w => w.id === wireId)?.name || 'Unknown'}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <span className="size-3 rounded-full shrink-0 bg-blue-500 ring-1 ring-black/10" />
+                        No wire (default blue)
+                      </span>
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <span className="flex items-center gap-2">
+                      <span className="size-3 rounded-full shrink-0 bg-blue-500 ring-1 ring-black/10" />
+                      No wire (default blue)
+                    </span>
+                  </SelectItem>
+                  {wires.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="size-3 rounded-full shrink-0 ring-1 ring-black/10"
+                          style={{ backgroundColor: w.color }}
+                        />
+                        {w.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Route Type */}

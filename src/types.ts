@@ -43,6 +43,21 @@ export interface CreateJointPayload {
   pendingPhotos?: File[];
 }
 
+// === Wire Types ===
+export interface Wire {
+  id: string;
+  name: string;
+  color: string;
+  organizationId: string;
+  createdBy: { userId: string; userName: string };
+  createdAt: string;
+}
+
+export interface CreateWirePayload {
+  name: string;
+  color: string;
+}
+
 // === Segment Types ===
 export interface Segment {
   id: string;
@@ -53,6 +68,7 @@ export interface Segment {
   fiberCount: number;
   lengthMeters: number;
   extraLengthMeters?: number;
+  wireId?: string;
   organizationId: string;
   createdBy: { userId: string; userName: string };
   approvalStatus: ApprovalStatus;
@@ -68,6 +84,7 @@ export interface CreateSegmentPayload {
   fiberCount: number;
   lengthMeters?: number;
   extraLengthMeters?: number;
+  wireId?: string;
 }
 
 export interface SpliceJointPayload {

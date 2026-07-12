@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import maplibregl, { Map as MapLibreMap } from 'maplibre-gl';
-import type { FiberJoint, Segment, UserRole } from '../types';
+import type { FiberJoint, Segment, UserRole, Wire } from '../types';
 import type { JointType } from '../types';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
@@ -270,7 +270,7 @@ function JointPopup({ j, onEdit, onDelete, onApprove, onReject, onPhotoClick, us
   );
 }
 
-function SegmentPopup({ seg, fromLabel, toLabel, onEdit, onSplice, onDelete, onApprove, onReject, userRole }: { seg: Segment, fromLabel: string, toLabel: string, onEdit: (id: string) => void, onSplice: (id: string) => void, onDelete: (id: string) => void, onApprove?: (id: string) => void, onReject?: (id: string) => void, userRole?: UserRole | null }) {
+function SegmentPopup({ seg, fromLabel, toLabel, onEdit, onSplice, onDelete, onApprove, onReject, userRole, wireName, wireColor }: { seg: Segment, fromLabel: string, toLabel: string, onEdit: (id: string) => void, onSplice: (id: string) => void, onDelete: (id: string) => void, onApprove?: (id: string) => void, onReject?: (id: string) => void, userRole?: UserRole | null, wireName?: string, wireColor?: string }) {
   const dist = seg.lengthMeters >= 1000
     ? `${(seg.lengthMeters / 1000).toFixed(2)} km`
     : `${seg.lengthMeters.toFixed(0)} m`;
@@ -293,6 +293,12 @@ function SegmentPopup({ seg, fromLabel, toLabel, onEdit, onSplice, onDelete, onA
       <div className="flex flex-wrap gap-1.5 mb-1">
         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{seg.cableType}</Badge>
         <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{seg.fiberCount} fibers</Badge>
+        {wireName && (
+          <Badge variant="outline" className="border-gray-200 flex items-center gap-1">
+            <span className="size-2 rounded-full" style={{ backgroundColor: wireColor || '#3b82f6' }} />
+            {wireName}
+          </Badge>
+        )}
       </div>
       <div className="text-sm text-foreground">
         <p>Auto Length: <strong className="font-semibold">{dist}</strong></p>
@@ -376,6 +382,8 @@ interface MapViewProps {
   liveLocation?: { lat: number; lng: number; accuracy?: number } | null;
   // ── RBAC ──
   userRole?: UserRole | null;
+  // ── wire colors ──
+  wiresById?: Map<string, Wire>;
 }
 
 // ---------- component ----------
@@ -389,6 +397,7 @@ export default function MapView({
   moveMode, movePos, moveIcon, moveJointType, onMoveMarkerMove,
   liveLocation,
   userRole,
+  wiresById,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapObjRef = useRef<maplibregl.Map | null>(null);
@@ -422,6 +431,11 @@ export default function MapView({
   const cbPlacementMove = useRef(onPlacementMarkerMove);
   const cbMoveMove = useRef(onMoveMarkerMove);
   const cbPhotoClick = useRef<(url: string) => void>(null);
+
+  const modeRefs = useRef({ waypointMode, spliceMode, placementMode, moveMode });
+  useEffect(() => {
+    modeRefs.current = { waypointMode, spliceMode, placementMode, moveMode };
+  }, [waypointMode, spliceMode, placementMode, moveMode]);
 
   useEffect(() => {
     cbEdit.current = onEditJoint;
@@ -580,6 +594,9 @@ export default function MapView({
 
       // ── Segment click handler ──
       map.on('click', 'segments-click', (e) => {
+        const { waypointMode, spliceMode, placementMode, moveMode } = modeRefs.current;
+        if (waypointMode || spliceMode || placementMode || moveMode) return;
+        
         if (suppressClick.current) return;
         e.originalEvent.stopPropagation();
         suppressClick.current = true;
@@ -607,12 +624,16 @@ export default function MapView({
         const root = createRoot(container);
         segmentPopupRoot.current = root;
 
+        const wire = seg.wireId && wiresById ? wiresById.get(seg.wireId) : undefined;
+
         root.render(
           <SegmentPopup
             seg={seg}
             fromLabel={fromLabel}
             toLabel={toLabel}
             userRole={userRole}
+            wireName={wire?.name}
+            wireColor={wire?.color}
             onEdit={(id) => {
               segmentPopup.current?.remove();
               cbEditSeg.current?.(id);
@@ -785,6 +806,11 @@ export default function MapView({
       const isPendingDelete = seg.approvalStatus === 'PENDING_DELETE';
       const isHl = highlightedSegmentIds.includes(seg.id) || selectedSegmentId === seg.id;
       let color = isPending ? '#f59e0b' : isPendingDelete ? '#ef4444' : '#3b82f6';
+      // Use wire color if available
+      if (!isPending && !isPendingDelete && seg.wireId && wiresById) {
+        const wire = wiresById.get(seg.wireId);
+        if (wire) color = wire.color;
+      }
       let weight = (isPending || isPendingDelete) ? 2.5 : 3;
       let opacity = (isPending || isPendingDelete) ? 0.5 : 0.85;
       if (isHl) { color = '#f59e0b'; weight = 5; opacity = 0.85; }
@@ -822,7 +848,7 @@ export default function MapView({
 
     src.setData({ type: 'FeatureCollection', features });
     labelSrc?.setData({ type: 'FeatureCollection', features: labelFeatures });
-  }, [segments, jointsById, highlightedSegmentIds, selectedSegmentId, mapLoaded]);
+  }, [segments, jointsById, highlightedSegmentIds, selectedSegmentId, mapLoaded, wiresById]);
 
   // ── SYNC PREVIEW LINE ──
   useEffect(() => {

@@ -13,6 +13,7 @@ export interface RawSegment {
   fiberCount: number;
   lengthMeters: number;
   extraLengthMeters?: number;
+  wireId?: string;
   createdBy: { userId: string; userName: string };
   organizationId: string;
   approvalStatus: ApprovalStatus;
@@ -29,6 +30,7 @@ function mapSegment(raw: RawSegment): Segment {
     fiberCount: raw.fiberCount,
     lengthMeters: raw.lengthMeters,
     extraLengthMeters: raw.extraLengthMeters || 0,
+    wireId: raw.wireId || undefined,
     createdBy: raw.createdBy,
     organizationId: raw.organizationId || '',
     approvalStatus: raw.approvalStatus || 'APPROVED',
