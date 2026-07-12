@@ -7,7 +7,7 @@ import {
   Trash2, ChevronDown, ChevronUp, Settings, Route, MapPin, Building2,
   CircleDot, Circle, Scissors, Edit3, Navigation, CheckCircle2, XCircle,
   Clock, Users, Cable, AlertTriangle, ArrowUpDown, LayoutList, Network,
-  Copy, ExternalLink
+  Copy
 } from 'lucide-react';
 
 type FilterType = 'all' | 'main' | 'sub' | 'splice';
@@ -55,11 +55,7 @@ export default function Sidebar({
 
   const isOwner = userRole === 'OWNER';
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
+
 
   const getJointLabel = (id: string) => joints.find((j) => j.id === id)?.label || 'Unknown';
 
@@ -98,20 +94,7 @@ export default function Sidebar({
     return map;
   }, [segments]);
 
-  // Network stats
-  const stats = useMemo(() => {
-    const totalKm = segments.reduce((a, s) => a + s.lengthMeters, 0) / 1000;
-    const unconnected = joints.filter(j => (neighborMap.get(j.id)?.length || 0) === 0);
-    const hubJoints = joints.filter(j => (neighborMap.get(j.id)?.length || 0) >= 3);
-    // Wire breakdown
-    const wireStats = wires.map(w => {
-      const segs = segments.filter(s => s.wireId === w.id);
-      const km = segs.reduce((a, s) => a + s.lengthMeters, 0) / 1000;
-      return { wire: w, segCount: segs.length, km };
-    }).filter(ws => ws.segCount > 0);
-    const unassigned = segments.filter(s => !s.wireId).length;
-    return { totalKm, unconnected, hubJoints, wireStats, unassigned };
-  }, [joints, segments, neighborMap, wires]);
+
 
   // Exclude Base from list
   const listableJoints = useMemo(

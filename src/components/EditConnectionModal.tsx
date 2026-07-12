@@ -8,8 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Link, Loader2, AlertCircle, Edit3, MapIcon, Type, CornerUpRight, Cable, Settings2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Loader2, AlertCircle, Edit3, MapIcon, Type, CornerUpRight, Cable, Settings2 } from 'lucide-react';
 
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;

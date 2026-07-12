@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import {
-  Filter, X, Cable, CircleDot, Circle, Scissors, Building2, ChevronDown,
+  Filter, X, Cable, CircleDot, Circle, Scissors, Building2
 } from 'lucide-react';
 
 export interface MapFilters {
