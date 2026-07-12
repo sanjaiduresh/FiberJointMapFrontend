@@ -11,6 +11,8 @@ import AddConnectionModal from './components/AddConnectionModal';
 import LoginPage from './components/LoginPage';
 import Sidebar from './components/JointSidebar';
 import SearchBar from './components/SearchBar';
+import MapFilterBar from './components/MapFilterBar';
+import type { MapFilters } from './components/MapFilterBar';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -163,6 +165,15 @@ export default function App() {
   const [wireManagerOpen, setWireManagerOpen] = useState(false);
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const editingSegment = editingSegmentId ? segments.find(s => s.id === editingSegmentId) || null : null;
+
+  // ── map filter state ──
+  const [mapFilters, setMapFilters] = useState<MapFilters>({
+    wireId: null,
+    jointTypes: [],
+    cableType: null,
+  });
+
+  const isMapFiltering = mapFilters.wireId !== null || mapFilters.jointTypes.length > 0 || mapFilters.cableType !== null;
   const mapRef = useRef<MapLibreMap | null>(null);
 
   // ── placement mode state ──
@@ -209,6 +220,7 @@ export default function App() {
   const [traceMode, setTraceMode] = useState(false);
   const [traceFrom, setTraceFrom] = useState<string | null>(null);
   const [highlightedSegmentIds, setHighlightedSegmentIds] = useState<string[]>([]);
+  const [highlightedJointId, setHighlightedJointId] = useState<string | null>(null);
 
   // ── toast ──
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -227,14 +239,59 @@ export default function App() {
     }
   }, []);
 
-  // ── filtered joints ──
+  // ── map-filtered segments (wire + cable type filters) ──
+  const mapFilteredSegments = useMemo(() => {
+    if (!isMapFiltering) return segments;
+    return segments.filter(seg => {
+      if (mapFilters.wireId) {
+        // Show segments with matching wireId, or unassigned segments if no wire filter
+        if (seg.wireId !== mapFilters.wireId) return false;
+      }
+      if (mapFilters.cableType && seg.cableType !== mapFilters.cableType) return false;
+      return true;
+    });
+  }, [segments, mapFilters, isMapFiltering]);
+
+  // ── map-filtered joints (joint type filter + connected-to-visible-segments) ──
+  const mapFilteredJoints = useMemo(() => {
+    if (!isMapFiltering) return joints;
+
+    let result = joints;
+
+    // Filter by joint type
+    if (mapFilters.jointTypes.length > 0) {
+      result = result.filter(j => mapFilters.jointTypes.includes(j.jointType));
+    }
+
+    // If wire or cable filter is active, only show joints connected to visible segments
+    if (mapFilters.wireId || mapFilters.cableType) {
+      const connectedJointIds = new Set<string>();
+      mapFilteredSegments.forEach(seg => {
+        connectedJointIds.add(seg.fromJointId);
+        connectedJointIds.add(seg.toJointId);
+      });
+      result = result.filter(j => connectedJointIds.has(j.id));
+    }
+
+    return result;
+  }, [joints, mapFilters, isMapFiltering, mapFilteredSegments]);
+
+  const filterCounts = useMemo(() => ({
+    visibleSegments: mapFilteredSegments.length,
+    visibleJoints: mapFilteredJoints.length,
+    totalSegments: segments.length,
+    totalJoints: joints.length,
+  }), [mapFilteredSegments.length, mapFilteredJoints.length, segments.length, joints.length]);
+
+  // ── search-filtered joints (applied on top of map filters) ──
   const filteredJoints = useMemo(() => {
-    if (!searchQuery.trim()) return joints;
+    const base = isMapFiltering ? mapFilteredJoints : joints;
+    if (!searchQuery.trim()) return base;
     const q = searchQuery.toLowerCase();
-    return joints.filter(
+    return base.filter(
       (j) => j.label.toLowerCase().includes(q) || j.notes?.toLowerCase().includes(q),
     );
-  }, [joints, searchQuery]);
+  }, [joints, mapFilteredJoints, isMapFiltering, searchQuery]);
 
   const pendingFromJoint = pendingConnection
     ? joints.find((j) => j.id === pendingConnection.fromJointId) ?? null
@@ -520,6 +577,8 @@ export default function App() {
         <Sidebar
           joints={filteredJoints}
           segments={segments}
+          wires={wires}
+          wiresById={wiresById}
           onFlyTo={handleFlyTo}
           onEditJoint={setEditingJointId}
           onDeleteJoint={handleDeleteJoint}
@@ -533,6 +592,10 @@ export default function App() {
           onRejectJoint={handleRejectJoint}
           isDraftMap={isDraftMap}
           onOpenTeamManagement={() => setTeamManagementOpen(true)}
+          onHighlight={(jId, sIds) => {
+            setHighlightedJointId(jId);
+            setHighlightedSegmentIds(sIds);
+          }}
         />
       </div>
     </div>
@@ -627,6 +690,16 @@ export default function App() {
             >
               <X className="size-4 text-yellow-600" />
             </Button>
+          )}
+
+          {/* Map Filter */}
+          {!waypointMode && !spliceMode && !placementMode && !moveModeJointId && (
+            <MapFilterBar
+              wires={wires}
+              filters={mapFilters}
+              onChange={setMapFilters}
+              counts={filterCounts}
+            />
           )}
         </div>
 
@@ -955,7 +1028,7 @@ export default function App() {
         {/* ── Map ── */}
         <MapView
           joints={filteredJoints}
-          segments={segments}
+          segments={isMapFiltering ? mapFilteredSegments : segments}
           onMapClick={handleMapClick}
           onEditJoint={setEditingJointId}
           onDeleteJoint={handleDeleteJoint}
@@ -966,6 +1039,7 @@ export default function App() {
           onRejectSegment={handleRejectSegment}
           onSegmentClick={handleSegmentClick}
           highlightedSegmentIds={highlightedSegmentIds}
+          highlightedJointId={highlightedJointId}
           mapRef={mapRef}
           onMapReady={onMapReady}
           waypointMode={waypointMode}

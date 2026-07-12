@@ -356,6 +356,7 @@ interface MapViewProps {
   onRejectSegment?: (id: string) => void;
   onSegmentClick?: (segmentId: string, lat: number, lng: number) => void;
   highlightedSegmentIds: string[];
+  highlightedJointId?: string | null;
   mapRef: React.MutableRefObject<maplibregl.Map | null>;
   onMapReady?: (map: maplibregl.Map | null) => void;
   waypointMode?: boolean;
@@ -390,7 +391,7 @@ interface MapViewProps {
 
 export default function MapView({
   joints, segments, onMapClick, onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onEditSegment, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick,
-  highlightedSegmentIds, mapRef, onMapReady,
+  highlightedSegmentIds, highlightedJointId, mapRef, onMapReady,
   waypointMode, pendingWaypoints, pendingFromJoint, pendingToJoint,
   spliceMode, spliceMarkerPos, onSpliceMarkerMove,
   placementMode, placementPos, placementIcon, placementJointType, onPlacementMarkerMove,
@@ -745,6 +746,14 @@ export default function MapView({
         />
       );
 
+      const isHighlightedJoint = highlightedJointId === j.id;
+      const getFilterStr = () => {
+        if (isPending) return 'saturate(0.5)';
+        if (isPendingDelete) return 'grayscale(1) sepia(1) hue-rotate(-50deg) saturate(5)';
+        if (isHighlightedJoint) return 'drop-shadow(2px 0 0 #000) drop-shadow(-2px 0 0 #000) drop-shadow(0 2px 0 #000) drop-shadow(0 -2px 0 #000) drop-shadow(0 0 15px rgba(0,0,0,0.4)) brightness(1.1)';
+        return '';
+      };
+
       if (ex) {
         ex.setLngLat([j.lng, j.lat]);
         jRoots.current.get(j.id)?.render(popupContent);
@@ -753,16 +762,13 @@ export default function MapView({
         ex.getElement().style.width = `${w}px`;
         ex.getElement().style.height = `${h}px`;
         ex.getElement().style.opacity = isPending ? '0.55' : isPendingDelete ? '0.4' : '1';
-        ex.getElement().style.filter = isPending ? 'saturate(0.5)' : isPendingDelete ? 'grayscale(1) sepia(1) hue-rotate(-50deg) saturate(5)' : '';
+        ex.getElement().style.filter = getFilterStr();
+        if (isHighlightedJoint) { ex.getElement().style.zIndex = '50'; } else { ex.getElement().style.zIndex = ''; }
       } else {
         const el = mkEl(svg, w, h, suppressClick);
-        if (isPending) {
-          el.style.opacity = '0.55';
-          el.style.filter = 'saturate(0.5)';
-        } else if (isPendingDelete) {
-          el.style.opacity = '0.4';
-          el.style.filter = 'grayscale(1) sepia(1) hue-rotate(-50deg) saturate(5)';
-        }
+        el.style.opacity = isPending ? '0.55' : isPendingDelete ? '0.4' : '1';
+        el.style.filter = getFilterStr();
+        if (isHighlightedJoint) el.style.zIndex = '50';
         const container = document.createElement('div');
         const root = createRoot(container);
         root.render(popupContent);
@@ -782,7 +788,7 @@ export default function MapView({
         );
       }
     }
-  }, [joints, mapLoaded]);
+  }, [joints, mapLoaded, highlightedJointId]);
 
   // ── SYNC SEGMENT LINES + LABELS ──
   useEffect(() => {
