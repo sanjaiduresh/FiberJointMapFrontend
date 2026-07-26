@@ -63,6 +63,28 @@ export default function MapFilterBar({ wires, filters, onChange, counts }: MapFi
 
   return (
     <div className="flex flex-col gap-1.5 items-end">
+      {/* Toggle Button */}
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => setExpanded(!expanded)}
+        className={cn(
+          'bg-card shadow-sm relative transition-all',
+          isFiltering
+            ? 'border-primary/50 hover:border-primary text-primary hover:bg-primary/5'
+            : 'hover:bg-muted',
+          expanded && 'bg-muted',
+        )}
+        title="Filter Map"
+      >
+        <Filter className="size-4" />
+        {isFiltering && !expanded && (
+          <Badge className="absolute -top-1.5 -right-1.5 size-4 p-0 justify-center text-[9px] bg-primary text-primary-foreground shadow-sm">
+            {activeCount}
+          </Badge>
+        )}
+      </Button>
+
       {/* Expanded Filter Panel */}
       {expanded && (
         <div className="bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-xl p-3 w-64 space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-200">
@@ -176,27 +198,6 @@ export default function MapFilterBar({ wires, filters, onChange, counts }: MapFi
         </div>
       )}
 
-      {/* Toggle Button */}
-      <Button
-        variant="outline"
-        size="icon"
-        onClick={() => setExpanded(!expanded)}
-        className={cn(
-          'bg-card shadow-sm relative transition-all',
-          isFiltering
-            ? 'border-primary/50 hover:border-primary text-primary hover:bg-primary/5'
-            : 'hover:bg-muted',
-          expanded && 'bg-muted',
-        )}
-        title="Filter Map"
-      >
-        <Filter className="size-4" />
-        {isFiltering && !expanded && (
-          <Badge className="absolute -top-1.5 -right-1.5 size-4 p-0 justify-center text-[9px] bg-primary text-primary-foreground shadow-sm">
-            {activeCount}
-          </Badge>
-        )}
-      </Button>
     </div>
   );
 }

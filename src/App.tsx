@@ -303,6 +303,7 @@ export default function App() {
   // ── handlers ─────────────────────────────────────────────────────────────
 
   const handleMapClick = (lat: number, lng: number) => {
+    setHighlightedJointId(null);
     if (waypointMode) {
       setPendingWaypoints((prev) => [...prev, { lat, lng }]);
       return;
@@ -654,7 +655,7 @@ export default function App() {
         </Button>
 
         {/* Map Controls */}
-        <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
+        <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
           <Button
             variant="outline" size="icon"
             onClick={() => mapRef.current?.flyTo({ center: [BASE_LNG, BASE_LAT], zoom: 15, duration: 1500 })}
@@ -960,7 +961,7 @@ export default function App() {
 
         {/* ── FAB — only on Draft Map ── */}
         {isDraftMap && !waypointMode && !spliceMode && !placementMode && !moveModeJointId && (
-          <div className="absolute bottom-6 right-4 md:right-6 z-10">
+          <div className="absolute bottom-24 right-4 md:right-6 z-10">
             {showAddMenu && (
               <div className="absolute bottom-16 right-0 bg-card border border-border rounded-xl shadow-lg overflow-hidden mb-2 w-52 ring-1 ring-foreground/5">
                 <button
@@ -1040,6 +1041,7 @@ export default function App() {
           onSegmentClick={handleSegmentClick}
           highlightedSegmentIds={highlightedSegmentIds}
           highlightedJointId={highlightedJointId}
+          onJointClick={(id) => setHighlightedJointId(id)}
           mapRef={mapRef}
           onMapReady={onMapReady}
           waypointMode={waypointMode}

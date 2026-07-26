@@ -61,12 +61,11 @@ const PIN_COLORS: Record<JointType, string> = {
   Splice: '#a855f7',
 };
 
-// Pin sizes per joint type
 const PIN_SIZES: Record<JointType, { w: number; h: number; offset: number; cx: number; cy: number; ir: number }> = {
-  Base:   { w: 32, h: 44, offset: 44, cx: 16, cy: 16, ir: 9 },
-  Main:   { w: 26, h: 38, offset: 38, cx: 13, cy: 13, ir: 7 },
-  Sub:    { w: 22, h: 32, offset: 32, cx: 11, cy: 11, ir: 6 },
-  Splice: { w: 20, h: 28, offset: 28, cx: 10, cy: 10, ir: 5 },
+  Base:   { w: 24, h: 33, offset: 33, cx: 12, cy: 12, ir: 11 },
+  Main:   { w: 20, h: 28, offset: 28, cx: 10, cy: 10, ir: 9 },
+  Sub:    { w: 16, h: 24, offset: 24, cx: 8, cy: 8, ir: 7.5 },
+  Splice: { w: 14, h: 20, offset: 20, cx: 7, cy: 7, ir: 6 },
 };
 
 // Inner icon SVG paths — each returns content to draw inside a circle at (0,0) with radius `r`
@@ -346,6 +345,7 @@ interface MapViewProps {
   joints: FiberJoint[];
   segments: Segment[];
   onMapClick: (lat: number, lng: number) => void;
+  onJointClick?: (id: string) => void;
   onEditJoint?: (id: string) => void;
   onDeleteJoint: (id: string) => void;
   onApproveJoint?: (id: string) => void;
@@ -390,7 +390,7 @@ interface MapViewProps {
 // ---------- component ----------
 
 export default function MapView({
-  joints, segments, onMapClick, onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onEditSegment, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick,
+  joints, segments, onMapClick, onJointClick, onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onEditSegment, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick,
   highlightedSegmentIds, highlightedJointId, mapRef, onMapReady,
   waypointMode, pendingWaypoints, pendingFromJoint, pendingToJoint,
   spliceMode, spliceMarkerPos, onSpliceMarkerMove,
@@ -427,6 +427,7 @@ export default function MapView({
   const cbApproveSeg = useRef(onApproveSegment);
   const cbRejectSeg = useRef(onRejectSegment);
   const cbSplice = useRef(onSegmentClick);
+  const cbJointClick = useRef(onJointClick);
   const cbClick = useRef(onMapClick);
   const cbSpliceMove = useRef(onSpliceMarkerMove);
   const cbPlacementMove = useRef(onPlacementMarkerMove);
@@ -448,12 +449,13 @@ export default function MapView({
     cbApproveSeg.current = onApproveSegment;
     cbRejectSeg.current = onRejectSegment;
     cbSplice.current = onSegmentClick;
+    cbJointClick.current = onJointClick;
     cbClick.current = onMapClick;
     cbSpliceMove.current = onSpliceMarkerMove;
     cbPlacementMove.current = onPlacementMarkerMove;
     cbMoveMove.current = onMoveMarkerMove;
     cbPhotoClick.current = (url: string) => setPreviewUrl(url);
-  }, [onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onEditSegment, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick, onMapClick, onSpliceMarkerMove, onPlacementMarkerMove, onMoveMarkerMove]);
+  }, [onEditJoint, onDeleteJoint, onApproveJoint, onRejectJoint, onEditSegment, onDeleteSegment, onApproveSegment, onRejectSegment, onSegmentClick, onJointClick, onMapClick, onSpliceMarkerMove, onPlacementMarkerMove, onMoveMarkerMove]);
 
   const jointsById = useMemo(() => {
     const m = new Map<string, FiberJoint>();
@@ -779,6 +781,10 @@ export default function MapView({
           maxWidth: '300px',
           className: 'ft-popup',
         }).setDOMContent(container);
+        
+        popup.on('open', () => {
+          cbJointClick.current?.(j.id);
+        });
         
         curr.set(j.id,
           new maplibregl.Marker({ element: el, anchor: 'bottom' })
