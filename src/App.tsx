@@ -27,6 +27,7 @@ import SpliceJointModal from './components/SpliceJointModal';
 import EditJointModal from './components/EditJointModal';
 import EditConnectionModal from './components/EditConnectionModal';
 import WireManagerModal from './components/WireManagerModal';
+import BulkImportModal from './components/BulkImportModal';
 import TeamManagement from './components/TeamManagement';
 import AdminDashboard from './components/AdminDashboard';
 
@@ -163,6 +164,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [teamManagementOpen, setTeamManagementOpen] = useState(false);
   const [wireManagerOpen, setWireManagerOpen] = useState(false);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const editingSegment = editingSegmentId ? segments.find(s => s.id === editingSegmentId) || null : null;
 
@@ -593,6 +595,7 @@ export default function App() {
           onRejectJoint={handleRejectJoint}
           isDraftMap={isDraftMap}
           onOpenTeamManagement={() => setTeamManagementOpen(true)}
+          onOpenImport={() => setBulkImportOpen(true)}
           onHighlight={(jId, sIds) => {
             setHighlightedJointId(jId);
             setHighlightedSegmentIds(sIds);
@@ -1209,6 +1212,14 @@ export default function App() {
           onUpdateWire={updateWire}
           onDeleteWire={deleteWire}
           onClose={() => setWireManagerOpen(false)}
+        />
+      )}
+
+      {/* ── Bulk Import ── */}
+      {bulkImportOpen && (
+        <BulkImportModal
+          onClose={() => setBulkImportOpen(false)}
+          onImport={createJoint}
         />
       )}
 

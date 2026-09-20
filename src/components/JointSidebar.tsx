@@ -7,7 +7,7 @@ import {
   Trash2, ChevronDown, ChevronUp, Settings, Route, MapPin, Building2,
   CircleDot, Circle, Scissors, Edit3, Navigation, CheckCircle2, XCircle,
   Clock, Users, Cable, AlertTriangle, ArrowUpDown, LayoutList, Network,
-  Copy
+  Copy, FileSpreadsheet
 } from 'lucide-react';
 
 type FilterType = 'all' | 'main' | 'sub' | 'splice';
@@ -33,6 +33,7 @@ interface SidebarProps {
   isDraftMap?: boolean;
   onOpenTeamManagement?: () => void;
   onHighlight?: (jointId: string | null, segmentIds: string[]) => void;
+  onOpenImport?: () => void;
 }
 
 const TYPE_CONFIG: Record<JointType, { icon: React.ElementType; label: string; dot: string; badge: string }> = {
@@ -46,7 +47,7 @@ export default function Sidebar({
   joints, segments, wires, wiresById, onFlyTo, onEditJoint, onDeleteJoint,
   onTraceRoute, traceMode, onToggleTraceMode, traceFrom,
   onOpenSettings, userRole, onApproveJoint, onRejectJoint,
-  isDraftMap, onOpenTeamManagement, onHighlight,
+  isDraftMap, onOpenTeamManagement, onHighlight, onOpenImport,
 }: SidebarProps) {
   const [filter, setFilter] = useState<FilterType>('all');
   const [expandedJoint, setExpandedJoint] = useState<string | null>(null);
@@ -408,6 +409,11 @@ export default function Sidebar({
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-border bg-muted/40 flex gap-2">
+        {isDraftMap && onOpenImport && (
+          <Button variant="outline" size="sm" className="flex-1 gap-2 text-muted-foreground hover:text-foreground" onClick={onOpenImport}>
+            <FileSpreadsheet className="size-3.5" /> Import
+          </Button>
+        )}
         {isOwner && onOpenTeamManagement && (
           <Button variant="outline" size="sm" className="flex-1 gap-2 text-muted-foreground hover:text-foreground" onClick={onOpenTeamManagement}>
             <Users className="size-3.5" /> Team
