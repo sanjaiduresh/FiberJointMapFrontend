@@ -101,9 +101,23 @@ export function useWires(token: string | null) {
     fetchWires();
   }, [fetchWires]);
 
+  const deleteAllWires = useCallback(async () => {
+    const res = await fetch(`${API_URL}/danger/all`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to delete all wires');
+    }
+    setWires([]);
+    return await res.json();
+  }, [token]);
+
   return {
     wires, loading, error,
     createWire, updateWire, deleteWire,
+    deleteAllWires,
     refetch: fetchWires,
   };
 }

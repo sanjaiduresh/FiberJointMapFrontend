@@ -14,6 +14,7 @@ import SearchBar from './components/SearchBar';
 import MapFilterBar from './components/MapFilterBar';
 import type { MapFilters } from './components/MapFilterBar';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -22,6 +23,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Building, Locate,
   MapPin, Plus, Link, X, Undo2, Check, Loader2, LogOut,
   Map as MapIcon, Settings, Trash2, Scissors, Circle, CircleDot, Cable,
+  AlertTriangle,
 } from 'lucide-react';
 import SpliceJointModal from './components/SpliceJointModal';
 import EditJointModal from './components/EditJointModal';
@@ -81,8 +83,9 @@ export default function App() {
   // Live map: only APPROVED items
   const {
     joints: approvedJoints, loading: ajLoading, error: ajError,
-    createJoint, deleteJoint, spliceJoint, updateJoint,
+    createJoint, createJointsBulk, deleteJoint, spliceJoint, updateJoint,
     approveJoint, rejectJoint,
+    resetNetwork,
     refetch: refetchApprovedJoints,
     uploadJointPhoto, deleteJointPhoto,
   } = useJoints(token, 'APPROVED,PENDING_EDIT,PENDING_DELETE');
@@ -95,7 +98,7 @@ export default function App() {
 
   const {
     segments: approvedSegments, loading: asLoading, error: asError,
-    createSegment, updateSegment, deleteSegment, applySplice,
+    createSegment, createSegmentsBulk, updateSegment, deleteSegment, applySplice,
     approveSegment, rejectSegment,
     refetch: refetchApprovedSegments,
   } = useSegments(token, 'APPROVED,PENDING_EDIT,PENDING_DELETE');
@@ -107,7 +110,7 @@ export default function App() {
 
   // Wires
   const {
-    wires, createWire, updateWire, deleteWire,
+    wires, createWire, updateWire, deleteWire, deleteAllWires,
   } = useWires(token);
 
   // Wire lookup map
@@ -230,6 +233,36 @@ export default function App() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  // ── danger zone state ──
+  const [dangerConfirmAction, setDangerConfirmAction] = useState<'resetAll' | 'clearConnections' | 'clearWires' | null>(null);
+  const [dangerLoading, setDangerLoading] = useState(false);
+
+  const handleExecuteDangerAction = async () => {
+    if (!dangerConfirmAction) return;
+    setDangerLoading(true);
+    try {
+      if (dangerConfirmAction === 'resetAll') {
+        await resetNetwork({ deleteJoints: true, deleteSegments: true, deleteWires: true, deleteCuts: true });
+        showToast('Network reset complete. All joints, connections, and wires deleted.', 'success');
+      } else if (dangerConfirmAction === 'clearConnections') {
+        await resetNetwork({ deleteJoints: false, deleteSegments: true, deleteWires: true, deleteCuts: true });
+        showToast('All connections and wires deleted.', 'success');
+      } else if (dangerConfirmAction === 'clearWires') {
+        await deleteAllWires();
+        showToast('All custom wires deleted.', 'success');
+      }
+      refetchApprovedJoints();
+      refetchDraftJoints();
+      refetchApprovedSegments();
+      refetchDraftSegments();
+      setDangerConfirmAction(null);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to perform danger action', 'error');
+    } finally {
+      setDangerLoading(false);
+    }
+  };
 
   // ── map ready ──
   const hasFlownToBase = useRef(false);
@@ -1220,6 +1253,12 @@ export default function App() {
         <BulkImportModal
           onClose={() => setBulkImportOpen(false)}
           onImport={createJoint}
+          onImportBulk={createJointsBulk}
+          onImportSegment={createSegment}
+          onImportSegmentBulk={createSegmentsBulk}
+          existingJoints={approvedJoints}
+          wires={wires}
+          onCreateWire={createWire}
         />
       )}
 
@@ -1372,6 +1411,48 @@ export default function App() {
               </div>
             </section>
 
+            {/* Danger Zone for OWNER */}
+            {role === 'OWNER' && (
+              <section className="pt-2 border-t border-destructive/20">
+                <p className="text-xs font-semibold text-destructive uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <AlertTriangle className="size-3.5" />
+                  Danger Zone
+                </p>
+                <div className="space-y-2 bg-destructive/5 border border-destructive/20 rounded-xl p-3">
+                  <p className="text-[11px] text-muted-foreground mb-2">
+                    Owner-only destructive operations for clearing or resetting network data.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs justify-start border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => setDangerConfirmAction('clearConnections')}
+                  >
+                    <Scissors className="size-3.5 mr-2" />
+                    Delete All Connections & Wires
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs justify-start border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => setDangerConfirmAction('clearWires')}
+                  >
+                    <Cable className="size-3.5 mr-2" />
+                    Delete All Wires Only
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full text-xs justify-start font-medium"
+                    onClick={() => setDangerConfirmAction('resetAll')}
+                  >
+                    <Trash2 className="size-3.5 mr-2" />
+                    Reset Entire Network (All Data)
+                  </Button>
+                </div>
+              </section>
+            )}
+
             {/* Account */}
             <section>
               <p className="text-xs font-semibold text-destructive/70 uppercase tracking-wider mb-3">
@@ -1389,6 +1470,46 @@ export default function App() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Danger Zone Confirmation Dialog */}
+      <Dialog open={dangerConfirmAction !== null} onOpenChange={(open) => !open && setDangerConfirmAction(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="size-5" />
+              Confirm Destructive Action
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-foreground">
+              {dangerConfirmAction === 'resetAll' && (
+                <>Are you sure you want to <strong>RESET THE ENTIRE NETWORK</strong>? This will permanently delete all joints, connections, wires, and splices. This action cannot be undone.</>
+              )}
+              {dangerConfirmAction === 'clearConnections' && (
+                <>Are you sure you want to <strong>DELETE ALL CONNECTIONS & WIRES</strong>? All segments, custom wires, and splices will be removed. Joints will be preserved. This action cannot be undone.</>
+              )}
+              {dangerConfirmAction === 'clearWires' && (
+                <>Are you sure you want to <strong>DELETE ALL CUSTOM WIRES</strong>? All wire definitions will be deleted. Connections will remain but lose their assigned wires. This action cannot be undone.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setDangerConfirmAction(null)}
+              disabled={dangerLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleExecuteDangerAction}
+              disabled={dangerLoading}
+            >
+              {dangerLoading ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+              Confirm & Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

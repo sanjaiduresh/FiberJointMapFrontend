@@ -84,6 +84,22 @@ export function useJoints(token: string | null, approvalStatusFilter?: string) {
     return newJoint;
   }, [token]);
 
+  const createJointsBulk = useCallback(async (payloads: CreateJointPayload[]): Promise<FiberJoint[]> => {
+    const res = await fetch(`${API_URL}/bulk`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ joints: payloads }),
+    });
+    if (!res.ok) throw new Error('Failed to bulk create joints');
+    const rawList: RawJoint[] = await res.json();
+    const newJoints = rawList.map(mapJoint);
+    setJoints((prev) => [...newJoints, ...prev]);
+    return newJoints;
+  }, [token]);
+
   const deleteJoint = useCallback(async (id: string) => {
     const res = await fetch(`${API_URL}/${id}`, {
       method: 'DELETE',
@@ -203,9 +219,47 @@ export function useJoints(token: string | null, approvalStatusFilter?: string) {
     return () => clearInterval(interval);
   }, [fetchJoints]);
 
+  const deleteAllJoints = useCallback(async () => {
+    const res = await fetch(`${API_URL}/danger/all`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to delete all joints');
+    }
+    setJoints([]);
+    return await res.json();
+  }, [token]);
+
+  const resetNetwork = useCallback(async (options?: {
+    deleteJoints?: boolean;
+    deleteSegments?: boolean;
+    deleteWires?: boolean;
+    deleteCuts?: boolean;
+  }) => {
+    const res = await fetch(`${API_URL}/danger/reset-network`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(options || {}),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to reset network');
+    }
+    if (options?.deleteJoints !== false) {
+      setJoints([]);
+    }
+    return await res.json();
+  }, [token]);
+
   return {
     joints, loading, error,
-    createJoint, updateJoint, deleteJoint,
+    createJoint, createJointsBulk, updateJoint, deleteJoint,
+    deleteAllJoints, resetNetwork,
     approveJoint, rejectJoint,
     spliceJoint, refetch: fetchJoints,
     uploadJointPhoto, deleteJointPhoto,

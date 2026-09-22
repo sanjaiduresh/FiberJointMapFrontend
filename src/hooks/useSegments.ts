@@ -80,6 +80,22 @@ export function useSegments(token: string | null, approvalStatusFilter?: string)
     return newSegment;
   }, [token]);
 
+  const createSegmentsBulk = useCallback(async (payloads: CreateSegmentPayload[]): Promise<Segment[]> => {
+    const res = await fetch(`${API_URL}/bulk`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ segments: payloads }),
+    });
+    if (!res.ok) throw new Error('Failed to bulk create segments');
+    const rawList: RawSegment[] = await res.json();
+    const newSegments = rawList.map(mapSegment);
+    setSegments((prev) => [...newSegments, ...prev]);
+    return newSegments;
+  }, [token]);
+
   const updateSegment = useCallback(async (id: string, payload: Partial<CreateSegmentPayload>) => {
     const res = await fetch(`${API_URL}/${id}`, {
       method: 'PUT',
@@ -154,9 +170,23 @@ export function useSegments(token: string | null, approvalStatusFilter?: string)
   }, [fetchSegments]);
 
 
+  const deleteAllSegments = useCallback(async () => {
+    const res = await fetch(`${API_URL}/danger/all`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to delete all segments');
+    }
+    setSegments([]);
+    return await res.json();
+  }, [token]);
+
   return {
     segments, loading, error,
-    createSegment, updateSegment, deleteSegment,
+    createSegment, createSegmentsBulk, updateSegment, deleteSegment,
+    deleteAllSegments,
     approveSegment, rejectSegment,
     applySplice,
     refetch: fetchSegments,
