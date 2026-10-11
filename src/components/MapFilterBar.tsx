@@ -4,13 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import {
-  Filter, X, Cable, CircleDot, Circle, Scissors, Building2
+  Filter, X, Cable, CircleDot, Circle, Scissors, Building2, Shapes
 } from 'lucide-react';
+import { JOINT_ICON_OPTIONS, buildJointSVG } from './MapView';
 
 export interface MapFilters {
-  wireId: string | null;
+  wireIds: string[];
   jointTypes: JointType[];
   cableType: 'Single Mode' | 'Multi Mode' | null;
+  iconTypes: string[];
 }
 
 interface MapFilterBarProps {
@@ -33,13 +35,13 @@ const JOINT_TYPE_CONFIG: { type: JointType; icon: React.ElementType; label: stri
   { type: 'Splice', icon: Scissors, label: 'Splice', color: 'bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200', dot: 'bg-purple-500' },
 ];
 
-const EMPTY_FILTERS: MapFilters = { wireId: null, jointTypes: [], cableType: null };
+const EMPTY_FILTERS: MapFilters = { wireIds: [], jointTypes: [], cableType: null, iconTypes: [] };
 
 export default function MapFilterBar({ wires, filters, onChange, counts }: MapFilterBarProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const isFiltering = filters.wireId !== null || filters.jointTypes.length > 0 || filters.cableType !== null;
-  const activeCount = (filters.wireId ? 1 : 0) + (filters.jointTypes.length > 0 ? 1 : 0) + (filters.cableType ? 1 : 0);
+  const isFiltering = filters.wireIds.length > 0 || filters.jointTypes.length > 0 || filters.cableType !== null || filters.iconTypes.length > 0;
+  const activeCount = (filters.wireIds.length > 0 ? 1 : 0) + (filters.jointTypes.length > 0 ? 1 : 0) + (filters.cableType ? 1 : 0) + (filters.iconTypes.length > 0 ? 1 : 0);
 
   const handleClear = () => {
     onChange(EMPTY_FILTERS);
@@ -53,12 +55,24 @@ export default function MapFilterBar({ wires, filters, onChange, counts }: MapFi
     onChange({ ...filters, jointTypes: next });
   };
 
-  const setWireFilter = (wireId: string | null) => {
-    onChange({ ...filters, wireId });
+  const toggleWire = (wId: string) => {
+    const current = filters.wireIds;
+    const next = current.includes(wId)
+      ? current.filter(id => id !== wId)
+      : [...current, wId];
+    onChange({ ...filters, wireIds: next });
   };
 
   const setCableFilter = (cableType: 'Single Mode' | 'Multi Mode' | null) => {
     onChange({ ...filters, cableType });
+  };
+
+  const toggleIconType = (iconKey: string) => {
+    const current = filters.iconTypes;
+    const next = current.includes(iconKey)
+      ? current.filter(k => k !== iconKey)
+      : [...current, iconKey];
+    onChange({ ...filters, iconTypes: next });
   };
 
   return (
@@ -95,35 +109,27 @@ export default function MapFilterBar({ wires, filters, onChange, counts }: MapFi
               <Cable className="size-3" /> Wire Filter
             </p>
             <div className="flex flex-wrap gap-1">
-              <button
-                onClick={() => setWireFilter(null)}
-                className={cn(
-                  'text-[10px] px-2 py-1 rounded-md border transition-all font-medium',
-                  !filters.wireId
-                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                    : 'bg-card text-muted-foreground border-border hover:bg-muted hover:text-foreground',
-                )}
-              >
-                All wires
-              </button>
-              {wires.map((w) => (
-                <button
-                  key={w.id}
-                  onClick={() => setWireFilter(filters.wireId === w.id ? null : w.id)}
-                  className={cn(
-                    'text-[10px] px-2 py-1 rounded-md border transition-all font-medium flex items-center gap-1.5',
-                    filters.wireId === w.id
-                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                      : 'bg-card text-muted-foreground border-border hover:bg-muted hover:text-foreground',
-                  )}
-                >
-                  <span
-                    className="size-2.5 rounded-full shrink-0 ring-1 ring-black/10"
-                    style={{ backgroundColor: w.color }}
-                  />
-                  {w.name}
-                </button>
-              ))}
+              {wires.map((w) => {
+                const isActive = filters.wireIds.includes(w.id);
+                return (
+                  <button
+                    key={w.id}
+                    onClick={() => toggleWire(w.id)}
+                    className={cn(
+                      'text-[10px] px-2 py-1 rounded-md border transition-all font-medium flex items-center gap-1.5',
+                      isActive
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                        : 'bg-card text-muted-foreground border-border hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    <span
+                      className="size-2.5 rounded-full shrink-0 ring-1 ring-black/10"
+                      style={{ backgroundColor: w.color }}
+                    />
+                    {w.name}
+                  </button>
+                );
+              })}
               {wires.length === 0 && (
                 <span className="text-[10px] text-muted-foreground/60 italic">No wires created</span>
               )}
@@ -152,6 +158,38 @@ export default function MapFilterBar({ wires, filters, onChange, counts }: MapFi
                     <span className={cn('size-2 rounded-full shrink-0', isActive ? dot : 'bg-muted-foreground/30')} />
                     <Icon className="size-3" />
                     {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Icon Type Filter */}
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1">
+              <Shapes className="size-3" /> Icon Type
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {JOINT_ICON_OPTIONS.map((opt) => {
+                const isActive = filters.iconTypes.includes(opt.key);
+                const { svg } = buildJointSVG('Main', opt.key);
+                return (
+                  <button
+                    key={opt.key}
+                    onClick={() => toggleIconType(opt.key)}
+                    className={cn(
+                      'text-[10px] px-2 py-1 rounded-md border transition-all font-medium flex items-center gap-1.5',
+                      isActive
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm hover:bg-emerald-200'
+                        : 'bg-card text-muted-foreground border-border hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    <span
+                      className="size-4 flex items-center justify-center shrink-0 [&_svg]:!size-3"
+                      dangerouslySetInnerHTML={{ __html: svg }}
+                      style={{ transform: 'scale(0.55)' }}
+                    />
+                    {opt.label}
                   </button>
                 );
               })}

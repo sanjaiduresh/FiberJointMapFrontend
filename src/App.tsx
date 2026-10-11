@@ -173,12 +173,13 @@ export default function App() {
 
   // ── map filter state ──
   const [mapFilters, setMapFilters] = useState<MapFilters>({
-    wireId: null,
+    wireIds: [],
     jointTypes: [],
     cableType: null,
+    iconTypes: [],
   });
 
-  const isMapFiltering = mapFilters.wireId !== null || mapFilters.jointTypes.length > 0 || mapFilters.cableType !== null;
+  const isMapFiltering = mapFilters.wireIds.length > 0 || mapFilters.jointTypes.length > 0 || mapFilters.cableType !== null || mapFilters.iconTypes.length > 0;
   const mapRef = useRef<MapLibreMap | null>(null);
 
   // ── placement mode state ──
@@ -278,9 +279,8 @@ export default function App() {
   const mapFilteredSegments = useMemo(() => {
     if (!isMapFiltering) return segments;
     return segments.filter(seg => {
-      if (mapFilters.wireId) {
-        // Show segments with matching wireId, or unassigned segments if no wire filter
-        if (seg.wireId !== mapFilters.wireId) return false;
+      if (mapFilters.wireIds.length > 0) {
+        if (!seg.wireId || !mapFilters.wireIds.includes(seg.wireId)) return false;
       }
       if (mapFilters.cableType && seg.cableType !== mapFilters.cableType) return false;
       return true;
@@ -298,8 +298,13 @@ export default function App() {
       result = result.filter(j => mapFilters.jointTypes.includes(j.jointType));
     }
 
+    // Filter by icon type
+    if (mapFilters.iconTypes.length > 0) {
+      result = result.filter(j => mapFilters.iconTypes.includes(j.icon || 'default'));
+    }
+
     // If wire or cable filter is active, only show joints connected to visible segments
-    if (mapFilters.wireId || mapFilters.cableType) {
+    if (mapFilters.wireIds.length > 0 || mapFilters.cableType) {
       const connectedJointIds = new Set<string>();
       mapFilteredSegments.forEach(seg => {
         connectedJointIds.add(seg.fromJointId);
