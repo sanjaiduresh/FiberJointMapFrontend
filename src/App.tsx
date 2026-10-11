@@ -177,6 +177,7 @@ export default function App() {
     jointTypes: [],
     cableType: null,
     iconTypes: [],
+    excludeMode: false,
   });
 
   const isMapFiltering = mapFilters.wireIds.length > 0 || mapFilters.jointTypes.length > 0 || mapFilters.cableType !== null || mapFilters.iconTypes.length > 0;
@@ -278,11 +279,16 @@ export default function App() {
   // ── map-filtered segments (wire + cable type filters) ──
   const mapFilteredSegments = useMemo(() => {
     if (!isMapFiltering) return segments;
+    const { excludeMode } = mapFilters;
     return segments.filter(seg => {
       if (mapFilters.wireIds.length > 0) {
-        if (!seg.wireId || !mapFilters.wireIds.includes(seg.wireId)) return false;
+        const matched = seg.wireId ? mapFilters.wireIds.includes(seg.wireId) : false;
+        if (excludeMode ? matched : !matched) return false;
       }
-      if (mapFilters.cableType && seg.cableType !== mapFilters.cableType) return false;
+      if (mapFilters.cableType) {
+        const matched = seg.cableType === mapFilters.cableType;
+        if (excludeMode ? matched : !matched) return false;
+      }
       return true;
     });
   }, [segments, mapFilters, isMapFiltering]);
@@ -290,27 +296,44 @@ export default function App() {
   // ── map-filtered joints (joint type filter + connected-to-visible-segments) ──
   const mapFilteredJoints = useMemo(() => {
     if (!isMapFiltering) return joints;
+    const { excludeMode } = mapFilters;
 
     let result = joints;
 
     // Filter by joint type
     if (mapFilters.jointTypes.length > 0) {
-      result = result.filter(j => mapFilters.jointTypes.includes(j.jointType));
+      result = result.filter(j =>
+        excludeMode
+          ? !mapFilters.jointTypes.includes(j.jointType)
+          : mapFilters.jointTypes.includes(j.jointType),
+      );
     }
 
     // Filter by icon type
     if (mapFilters.iconTypes.length > 0) {
-      result = result.filter(j => mapFilters.iconTypes.includes(j.icon || 'default'));
+      result = result.filter(j => {
+        const icon = j.icon || 'default';
+        return excludeMode
+          ? !mapFilters.iconTypes.includes(icon)
+          : mapFilters.iconTypes.includes(icon);
+      });
     }
 
-    // If wire or cable filter is active, only show joints connected to visible segments
+    // If wire or cable filter is active, only show/hide joints connected to matched segments
     if (mapFilters.wireIds.length > 0 || mapFilters.cableType) {
       const connectedJointIds = new Set<string>();
       mapFilteredSegments.forEach(seg => {
         connectedJointIds.add(seg.fromJointId);
         connectedJointIds.add(seg.toJointId);
       });
-      result = result.filter(j => connectedJointIds.has(j.id));
+      if (excludeMode) {
+        // In exclude mode, mapFilteredSegments already dropped the unwanted segments,
+        // so joints not connected to ANY remaining segment are hidden.
+        // We keep joints that are still reachable from a visible segment OR have no segments.
+        result = result.filter(j => connectedJointIds.has(j.id));
+      } else {
+        result = result.filter(j => connectedJointIds.has(j.id));
+      }
     }
 
     return result;
